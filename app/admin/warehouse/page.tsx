@@ -618,15 +618,15 @@ export default function WarehousePage() {
                                 generateShippingLabels(order.id, parseInt(input.value) || 8);
                               }}
                             >
-                              <Printer className="h-4 w-4 mr-1" />
-                              <span className="hidden sm:inline">Etykiety</span>
+                              <Printer className="h-4 w-4 sm:mr-1" />
+                              <span className="hidden xs:inline">Etykiety</span>
                             </Button>
                             <Button 
                               size="sm"
                               onClick={() => markOrderShipped(order.id)}
                             >
-                              <CheckCircle2 className="h-4 w-4 mr-1" />
-                              <span className="hidden sm:inline">Wysyłka</span>
+                              <CheckCircle2 className="h-4 w-4 sm:mr-1" />
+                              <span className="hidden xs:inline">Wysyłka</span>
                             </Button>
                           </div>
                         )}
@@ -653,16 +653,16 @@ export default function WarehousePage() {
                       </div>
                     </div>
 
-                    <div className="overflow-x-auto">
-                      <Table>
+                    <div className="overflow-x-auto table-responsive">
+                      <Table className="min-w-full">
                         <TableHeader>
                           <TableRow>
-                            <TableHead className="min-w-[40px]">#</TableHead>
-                            <TableHead className="min-w-[200px]">Produkt</TableHead>
-                            <TableHead className="min-w-[120px] hidden md:table-cell">Dostawca</TableHead>
-                            <TableHead className="min-w-[80px]">Ilość</TableHead>
-                            <TableHead className="min-w-[100px] text-center">Dostarczone</TableHead>
-                            <TableHead className="min-w-[100px] text-center">Spakowane</TableHead>
+                            <TableHead className="w-12">#</TableHead>
+                            <TableHead className="min-w-[150px] max-w-[200px]">Produkt</TableHead>
+                            <TableHead className="min-w-[100px] max-w-[120px] hidden md:table-cell">Dostawca</TableHead>
+                            <TableHead className="w-20">Ilość</TableHead>
+                            <TableHead className="w-24 text-center">Dostarczone</TableHead>
+                            <TableHead className="w-24 text-center">Spakowane</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -671,14 +671,14 @@ export default function WarehousePage() {
                               key={item.id}
                               className={`${item.received_in_warehouse ? "bg-green-50" : ""} ${item.packed ? "bg-blue-50" : ""}`}
                             >
-                              <TableCell className="text-sm">{item.line_number}</TableCell>
-                              <TableCell className="font-medium">
-                                <div className="max-w-[200px] truncate" title={item.product_name}>
+                              <TableCell className="text-sm w-12">{item.line_number}</TableCell>
+                              <TableCell className="font-medium min-w-[150px] max-w-[200px]">
+                                <div className="truncate" title={item.product_name}>
                                   {item.product_name}
                                 </div>
                               </TableCell>
-                              <TableCell className="hidden md:table-cell text-sm">
-                                <div className="max-w-[120px] truncate" title={item.supplier_order_items?.[0]?.supplier_order?.supplier_name || item.actual_supplier || "-"}>
+                              <TableCell className="hidden md:table-cell text-sm min-w-[100px] max-w-[120px]">
+                                <div className="truncate" title={item.supplier_order_items?.[0]?.supplier_order?.supplier_name || item.actual_supplier || "-"}>
                                   {item.supplier_order_items?.[0]?.supplier_order?.supplier_name || item.actual_supplier || "-"}
                                 </div>
                               </TableCell>

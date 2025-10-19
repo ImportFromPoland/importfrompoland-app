@@ -67,6 +67,38 @@
   .table-responsive {
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
+    width: 100%;
+    max-width: 100vw;
+  }
+  
+  /* Mobile-specific styles */
+  @media (max-width: 640px) {
+    .table-responsive {
+      font-size: 0.875rem;
+    }
+    
+    .table-responsive th,
+    .table-responsive td {
+      padding: 0.5rem 0.25rem;
+    }
+    
+    /* Make buttons more touch-friendly on mobile */
+    .table-responsive button {
+      min-height: 2rem;
+      min-width: 2rem;
+    }
+  }
+  
+  /* Extra small screens */
+  @media (max-width: 480px) {
+    .table-responsive {
+      font-size: 0.75rem;
+    }
+    
+    .table-responsive th,
+    .table-responsive td {
+      padding: 0.25rem;
+    }
   }
 }
 
