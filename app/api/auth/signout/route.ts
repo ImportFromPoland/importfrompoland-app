@@ -9,6 +9,6 @@ export async function POST(request: Request) {
   // Get the origin from the request
   const origin = new URL(request.url).origin;
   
-  return NextResponse.redirect(new URL("/login", origin));
+  return NextResponse.redirect(new URL("/logout", origin));
 }
 
