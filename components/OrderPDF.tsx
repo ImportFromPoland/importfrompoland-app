@@ -101,8 +101,8 @@ const styles = StyleSheet.create({
     fontSize: 9,
   },
   col1: { width: '5%' },
-  col2: { width: '25%' },
-  col3: { width: '25%', textAlign: 'right' },
+  col2: { width: '30%' },
+  col3: { width: '20%', textAlign: 'center' },
   col4: { width: '10%' },
   col5: { width: '12%' },
   col6: { width: '8%' },
@@ -369,7 +369,7 @@ export const OrderPDF: React.FC<OrderPDFProps> = ({ order, company, items, total
             <View style={styles.tableHeader}>
               <Text style={styles.col1}>#</Text>
               <Text style={styles.col2}>Product</Text>
-              <Text style={[styles.col3, { textAlign: 'right' }]}>Supplier</Text>
+              <Text style={[styles.col3, { textAlign: 'center' }]}>Supplier</Text>
               <Text style={styles.col4}>Qty</Text>
               <Text style={styles.col5}>Price EUR excl VAT</Text>
               <Text style={styles.col6}>VAT Rate</Text>
