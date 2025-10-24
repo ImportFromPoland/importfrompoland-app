@@ -114,10 +114,13 @@ export default function EditOrderPage() {
   };
 
   const addLine = () => {
+    // Find the highest line number and add 1
+    const maxLineNumber = lines.length > 0 ? Math.max(...lines.map(line => line.line_number)) : 0;
+    
     setLines([
       ...lines,
       {
-        line_number: lines.length + 1,
+        line_number: maxLineNumber + 1,
         product_name: "",
         website_url: "",
         supplier_name: "",
@@ -133,6 +136,7 @@ export default function EditOrderPage() {
 
   const removeLine = (index: number) => {
     const newLines = lines.filter((_, i) => i !== index);
+    // Renumber lines sequentially starting from 1
     newLines.forEach((line, i) => {
       line.line_number = i + 1;
     });
