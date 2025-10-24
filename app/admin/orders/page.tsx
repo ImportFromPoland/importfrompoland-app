@@ -13,7 +13,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Eye, Package, Truck, CheckCircle2, CreditCard } from "lucide-react";
+import { Eye, Package, Truck, CheckCircle2, CreditCard, Plus } from "lucide-react";
 import MarkAsPaidButton from "@/components/MarkAsPaidButton";
 import SuperadminDeleteButton from "@/components/SuperadminDeleteButton";
 
@@ -66,11 +66,19 @@ export default async function AdminOrdersPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold">Order Management</h1>
-        <p className="text-muted-foreground">
-          View and manage all customer orders
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold">Order Management</h1>
+          <p className="text-muted-foreground">
+            View and manage all customer orders
+          </p>
+        </div>
+        <Link href="/admin/orders/new">
+          <Button>
+            <Plus className="h-4 w-4 mr-2" />
+            Create New Basket
+          </Button>
+        </Link>
       </div>
 
       {/* Tabs */}

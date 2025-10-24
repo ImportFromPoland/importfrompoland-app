@@ -54,3 +54,5 @@ LEFT JOIN order_item_totals oit ON oit.order_id = o.id
 GROUP BY o.id, o.number, o.status, o.currency, o.vat_rate, o.shipping_cost, 
          o.discount_percent, o.markup_percent, o.created_at, o.submitted_at, 
          o.confirmed_at, o.paid_at, o.dispatched_at, o.delivered_at;
+
+

@@ -76,3 +76,5 @@ function ClientTabsSimple({ baskets, orders, tours, myTours = [] }: ClientTabsPr
 }
 
 export default ClientTabsSimple;
+
+

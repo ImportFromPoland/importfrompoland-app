@@ -159,7 +159,7 @@ export default function AdminToursPage() {
       console.log("All bookings (no joins):", allBookings);
       console.log("All bookings error:", allError);
 
-      // Then try with joins - only get bookings for non-archived tours
+      // Then try with joins - get bookings for upcoming tours (regardless of archive status)
       const { data: bookings, error } = await supabase
         .from('tour_bookings')
         .select(`
@@ -167,14 +167,14 @@ export default function AdminToursPage() {
           tour:tours(*),
           company:companies(*)
         `)
-        .eq('tour.is_archived', false)
+        .gte('tour.start_date', new Date().toISOString().split('T')[0]) // Only upcoming tours
         .order('created_at', { ascending: false });
 
       if (error) {
         console.error("Error loading bookings with joins:", error);
         // If joins fail, use the data without joins but filter manually
         const filteredBookings = (allBookings || []).filter(booking => {
-          // We can't filter by tour.is_archived without joins, so we'll show all
+          // We can't filter by tour details without joins, so we'll show all
           // This is a fallback - ideally the join should work
           return true;
         });
@@ -210,6 +210,26 @@ export default function AdminToursPage() {
     } catch (error) {
       console.error("Error confirming booking:", error);
       alert("Error confirming booking. Please try again.");
+    }
+  };
+
+  const deleteBooking = async (bookingId: string) => {
+    if (!confirm("Czy na pewno chcesz usunąć tę rezerwację? Ta operacja jest nieodwracalna!")) {
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('tour_bookings')
+        .delete()
+        .eq('id', bookingId);
+
+      if (error) throw error;
+      alert('Rezerwacja została usunięta!');
+      await loadBookings();
+    } catch (error) {
+      console.error('Error deleting booking:', error);
+      alert('Błąd podczas usuwania rezerwacji');
     }
   };
 
@@ -530,17 +550,32 @@ export default function AdminToursPage() {
     }
 
     try {
-      // First check if there are any bookings for this tour
-      const { data: bookings } = await supabase
-        .from('tour_bookings')
-        .select('id')
-        .eq('tour_id', tourId);
+      // Get tour details to check if it's archived
+      const { data: tour } = await supabase
+        .from('tours')
+        .select('is_archived')
+        .eq('id', tourId)
+        .single();
 
-      if (bookings && bookings.length > 0) {
-        alert("Nie można usunąć wycieczki, która ma rezerwacje. Najpierw usuń wszystkie rezerwacje.");
+      if (!tour) {
+        alert("Wycieczka nie została znaleziona.");
         return;
       }
 
+      // If tour is not archived, check for bookings
+      if (!tour.is_archived) {
+        const { data: bookings } = await supabase
+          .from('tour_bookings')
+          .select('id')
+          .eq('tour_id', tourId);
+
+        if (bookings && bookings.length > 0) {
+          alert("Nie można usunąć aktywnej wycieczki, która ma rezerwacje. Najpierw przenieś wycieczkę do archiwum, a następnie usuń wszystkie rezerwacje.");
+          return;
+        }
+      }
+
+      // Delete the tour
       const { error } = await supabase
         .from('tours')
         .delete()
@@ -550,6 +585,7 @@ export default function AdminToursPage() {
 
       alert("Wycieczka została usunięta!");
       await loadTours();
+      await loadBookings(); // Refresh bookings as well
     } catch (error) {
       console.error("Error deleting tour:", error);
       alert("Błąd podczas usuwania wycieczki. Spróbuj ponownie.");
@@ -559,19 +595,40 @@ export default function AdminToursPage() {
   const handleEdit = (tour: Tour) => {
     setEditingTour(tour);
     setFormData({
-      title: tour.title,
-      start_date: tour.start_date,
-      end_date: tour.end_date,
-      departure_airport: tour.departure_airport,
-      arrival_airport: tour.arrival_airport,
-      max_spaces: tour.max_spaces,
-      price_single: tour.price_single,
-      price_double: tour.price_double,
-      itinerary: tour.itinerary,
-      included_items: tour.included_items.join('\n'),
-      booking_process: tour.booking_process,
-      is_active: tour.is_active,
-      is_archived: tour.is_archived
+      title: tour.title || '',
+      start_date: tour.start_date || '',
+      end_date: tour.end_date || '',
+      departure_airport: tour.departure_airport || '',
+      arrival_airport: tour.arrival_airport || '',
+      max_spaces: tour.max_spaces || 6,
+      price_single: tour.price_single || 350,
+      price_double: tour.price_double || 550,
+      itinerary: tour.itinerary || '',
+      included_items: Array.isArray(tour.included_items) ? tour.included_items.join('\n') : (tour.included_items || ''),
+      booking_process: tour.booking_process || '',
+      is_active: tour.is_active ?? true,
+      is_archived: tour.is_archived ?? false,
+      // Flight information
+      outbound_carrier: tour.outbound_carrier || '',
+      outbound_departure_time: tour.outbound_departure_time || '',
+      outbound_arrival_time: tour.outbound_arrival_time || '',
+      outbound_departure_date: tour.outbound_departure_date || '',
+      outbound_arrival_date: tour.outbound_arrival_date || '',
+      return_carrier: tour.return_carrier || '',
+      return_departure_time: tour.return_departure_time || '',
+      return_arrival_time: tour.return_arrival_time || '',
+      return_departure_date: tour.return_departure_date || '',
+      return_arrival_date: tour.return_arrival_date || '',
+      // Daily itinerary
+      day1_hotel: tour.day1_hotel || '',
+      day1_dinner: tour.day1_dinner || '',
+      day1_activities: tour.day1_activities || '',
+      day2_hotel: tour.day2_hotel || '',
+      day2_dinner: tour.day2_dinner || '',
+      day2_activities: tour.day2_activities || '',
+      day3_hotel: tour.day3_hotel || '',
+      day3_dinner: tour.day3_dinner || '',
+      day3_activities: tour.day3_activities || ''
     });
     setShowForm(true);
   };
@@ -1112,6 +1169,15 @@ export default function AdminToursPage() {
                           Raport
                         </Button>
                       )}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => deleteBooking(booking.id)}
+                        className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                      >
+                        <Trash2 className="h-4 w-4 mr-1" />
+                        Usuń
+                      </Button>
                     </div>
                   </div>
                 </CardHeader>

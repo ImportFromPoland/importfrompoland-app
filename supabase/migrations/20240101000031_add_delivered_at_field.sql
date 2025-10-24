@@ -6,3 +6,5 @@ COMMENT ON COLUMN orders.delivered_at IS 'Timestamp when order was delivered to 
 
 -- Add index for efficient queries
 CREATE INDEX IF NOT EXISTS idx_orders_delivered_at ON orders(delivered_at);
+
+

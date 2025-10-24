@@ -9,3 +9,5 @@ CREATE INDEX IF NOT EXISTS idx_orders_paid_at ON orders(paid_at);
 
 -- Add comment
 COMMENT ON COLUMN orders.paid_at IS 'Timestamp when payment was received for the order';
+
+
