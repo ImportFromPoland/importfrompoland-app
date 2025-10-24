@@ -39,6 +39,7 @@ export default async function AdminOrdersPage() {
     .select(`
       *,
       company:companies(name, vat_number),
+      created_by_profile:profiles!created_by(full_name, email),
       items:order_items(id)
     `)
     .order("created_at", { ascending: false })
@@ -131,7 +132,14 @@ export default async function AdminOrdersPage() {
                           <TableCell className="font-medium">
                             {order.client_notes || "Bez nazwy"}
                           </TableCell>
-                          <TableCell>{order.company?.name}</TableCell>
+                          <TableCell>
+                            <div className="font-medium">{order.company?.name}</div>
+                            {order.created_by_profile?.full_name && (
+                              <div className="text-xs text-muted-foreground">
+                                {order.created_by_profile.full_name}
+                              </div>
+                            )}
+                          </TableCell>
                           <TableCell>{order.items?.length || 0}</TableCell>
                           <TableCell className="text-sm text-muted-foreground">
                             {formatDate(order.created_at)}
@@ -208,6 +216,11 @@ export default async function AdminOrdersPage() {
                           </TableCell>
                           <TableCell>
                             <div className="font-medium">{order.company?.name}</div>
+                            {order.created_by_profile?.full_name && (
+                              <div className="text-xs text-muted-foreground">
+                                {order.created_by_profile.full_name}
+                              </div>
+                            )}
                             {order.company?.vat_number && (
                               <div className="text-xs text-muted-foreground">
                                 VAT: {order.company.vat_number}
@@ -319,6 +332,11 @@ export default async function AdminOrdersPage() {
                           </TableCell>
                           <TableCell>
                             <div className="font-medium">{order.company?.name}</div>
+                            {order.created_by_profile?.full_name && (
+                              <div className="text-xs text-muted-foreground">
+                                {order.created_by_profile.full_name}
+                              </div>
+                            )}
                           </TableCell>
                           <TableCell className="text-sm text-muted-foreground">
                             {order.client_notes || "-"}
