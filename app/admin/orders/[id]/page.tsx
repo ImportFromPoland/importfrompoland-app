@@ -410,6 +410,7 @@ export default function AdminOrderDetailPage() {
                       <TableHead>Price (PLN)</TableHead>
                       <TableHead>Qty</TableHead>
                       <TableHead>Unit</TableHead>
+                      <TableHead>Notes</TableHead>
                       <TableHead className="text-right">Total (EUR)</TableHead>
                       {["confirmed", "partially_received", "ready_to_ship", "shipped"].includes(order.status) && (
                         <>
@@ -425,7 +426,7 @@ export default function AdminOrderDetailPage() {
                   <TableBody>
                     {items.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={["confirmed", "partially_received", "ready_to_ship", "shipped"].includes(order.status) ? 13 : 9} className="text-center py-8 text-muted-foreground">
+                        <TableCell colSpan={["confirmed", "partially_received", "ready_to_ship", "shipped"].includes(order.status) ? 14 : 10} className="text-center py-8 text-muted-foreground">
                           No items in this order
                         </TableCell>
                       </TableRow>
@@ -540,6 +541,23 @@ export default function AdminOrderDetailPage() {
                               <span className="text-sm">
                                 {item.unit_of_measure === "m2" ? "m²" : "pcs"}
                               </span>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            {editingItemId === item.id ? (
+                              <Textarea
+                                defaultValue={item.notes || ""}
+                                onBlur={(e) =>
+                                  updateItem(item.id, { notes: e.target.value })
+                                }
+                                placeholder="Item notes..."
+                                rows={2}
+                                className="min-w-[150px]"
+                              />
+                            ) : (
+                              <div className="min-w-[150px] text-sm">
+                                {item.notes || "-"}
+                              </div>
                             )}
                           </TableCell>
                           <TableCell className="text-right font-medium">

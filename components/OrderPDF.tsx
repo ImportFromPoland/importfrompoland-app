@@ -107,6 +107,12 @@ const styles = StyleSheet.create({
   col5: { width: '12%' },
   col6: { width: '8%' },
   col7: { width: '15%', textAlign: 'right' },
+  itemNotes: {
+    fontSize: 8,
+    color: '#666',
+    fontStyle: 'italic',
+    marginTop: 2,
+  },
   totalsSection: {
     marginTop: 20,
     marginLeft: 'auto',
@@ -406,7 +412,12 @@ export const OrderPDF: React.FC<OrderPDFProps> = ({ order, company, items, total
                   style={index % 2 === 0 ? styles.tableRow : styles.tableRowAlt}
                 >
                   <Text style={styles.col1}>{item.line_number}</Text>
-                  <Text style={styles.col2}>{item.product_name}</Text>
+                  <View style={styles.col2}>
+                    <Text>{item.product_name}</Text>
+                    {item.notes && (
+                      <Text style={styles.itemNotes}>{item.notes}</Text>
+                    )}
+                  </View>
                   <Text style={styles.col3}>{item.supplier_name || '-'}</Text>
                   <Text style={styles.col4}>
                     {item.quantity} {item.unit_of_measure === 'm2' ? 'm²' : 'pcs'}
