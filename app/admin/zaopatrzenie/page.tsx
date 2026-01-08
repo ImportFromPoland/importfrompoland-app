@@ -210,7 +210,8 @@ export default function ZaopatrzeniePage() {
     
     try {
       // Load order items with supplier info
-      const { data: items, error } = await supabase
+      // First try with polish_product_name
+      let { data: items, error } = await supabase
         .from("order_items")
         .select(`
           id,
@@ -228,6 +229,30 @@ export default function ZaopatrzeniePage() {
         .eq("order_id", order.id)
         .order("line_number");
 
+      // If error is about polish_product_name column not existing, retry without it
+      if (error && error.message.includes('polish_product_name')) {
+        console.warn("polish_product_name column not found, loading without it. Please run migration 20240101000033_add_polish_product_name.sql");
+        const { data: itemsRetry, error: errorRetry } = await supabase
+          .from("order_items")
+          .select(`
+            id,
+            product_name,
+            website_url,
+            quantity,
+            unit_of_measure,
+            unit_price,
+            supplier_name,
+            original_supplier_name,
+            net_cost_pln,
+            ordered_from_supplier
+          `)
+          .eq("order_id", order.id)
+          .order("line_number");
+        
+        items = itemsRetry;
+        error = errorRetry;
+      }
+
       if (error) {
         console.error("Error loading order items:", error);
         alert("Error loading order items: " + error.message);
@@ -235,7 +260,12 @@ export default function ZaopatrzeniePage() {
       }
 
       console.log("Loaded order items:", items);
-      setOrderItems(items || []);
+      // Add polish_product_name as undefined if not in response
+      const itemsWithPolish = (items || []).map(item => ({
+        ...item,
+        polish_product_name: item.polish_product_name || undefined
+      }));
+      setOrderItems(itemsWithPolish);
     } catch (error) {
       console.error("Error in handleViewOrderDetails:", error);
       alert("Error loading order details: " + error);
