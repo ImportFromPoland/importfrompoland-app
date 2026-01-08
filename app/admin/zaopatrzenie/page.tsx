@@ -18,6 +18,7 @@ interface PaidOrder {
   id: string;
   number: string;
   company: { name: string };
+  created_by_profile?: { full_name: string; email: string };
   created_at: string;
   totals: {
     grand_total: number;
@@ -59,6 +60,7 @@ export default function ZaopatrzeniePage() {
   const [orderItems, setOrderItems] = useState<Array<{
     id: string;
     product_name: string;
+    polish_product_name?: string;
     website_url?: string;
     quantity: number;
     unit_of_measure: string;
@@ -99,6 +101,7 @@ export default function ZaopatrzeniePage() {
           created_at,
           status,
           company:companies(name),
+          created_by_profile:profiles!created_by(full_name, email),
           items:order_items(id, product_name, quantity, unit_of_measure, unit_price)
         `)
         .eq("status", "paid")
@@ -136,6 +139,7 @@ export default function ZaopatrzeniePage() {
           created_at,
           status,
           company:companies(name),
+          created_by_profile:profiles!created_by(full_name, email),
           items:order_items(id, product_name, quantity, unit_of_measure, unit_price)
         `)
         .eq("status", "dispatched")
@@ -211,6 +215,7 @@ export default function ZaopatrzeniePage() {
         .select(`
           id,
           product_name,
+          polish_product_name,
           website_url,
           quantity,
           unit_of_measure,
@@ -537,7 +542,14 @@ export default function ZaopatrzeniePage() {
                   {paidOrders.map((order) => (
                     <TableRow key={order.id}>
                       <TableCell className="font-medium">{order.number}</TableCell>
-                      <TableCell>{order.company.name}</TableCell>
+                      <TableCell>
+                        <div className="font-medium">{order.company.name}</div>
+                        {order.created_by_profile?.full_name && (
+                          <div className="text-xs text-muted-foreground">
+                            {order.created_by_profile.full_name}
+                          </div>
+                        )}
+                      </TableCell>
                       <TableCell>{formatDate(order.created_at)}</TableCell>
                       <TableCell className="text-right">
                         {formatCurrency(order.totals.grand_total, "EUR")}
@@ -594,7 +606,14 @@ export default function ZaopatrzeniePage() {
                       {archivedOrders.map((order) => (
                         <TableRow key={order.id}>
                           <TableCell className="font-medium">{order.number}</TableCell>
-                          <TableCell>{order.company.name}</TableCell>
+                          <TableCell>
+                        <div className="font-medium">{order.company.name}</div>
+                        {order.created_by_profile?.full_name && (
+                          <div className="text-xs text-muted-foreground">
+                            {order.created_by_profile.full_name}
+                          </div>
+                        )}
+                      </TableCell>
                           <TableCell>{formatDate(order.created_at)}</TableCell>
                           <TableCell className="text-right">
                             {formatCurrency(order.totals.grand_total, "EUR")}
@@ -641,7 +660,9 @@ export default function ZaopatrzeniePage() {
               <div>
                 <CardTitle>Szczegóły zamówienia {selectedOrder.number}</CardTitle>
                 <p className="text-sm text-muted-foreground">
-                  {selectedOrder.company.name} • {formatDate(selectedOrder.created_at)}
+                  {selectedOrder.company.name}
+                  {selectedOrder.created_by_profile?.full_name && ` • ${selectedOrder.created_by_profile.full_name}`}
+                  {` • ${formatDate(selectedOrder.created_at)}`}
                 </p>
               </div>
               <div className="flex flex-col gap-2">
@@ -696,7 +717,34 @@ export default function ZaopatrzeniePage() {
               <TableBody>
                 {orderItems.map((item) => (
                   <TableRow key={item.id}>
-                    <TableCell className="font-medium">{item.product_name}</TableCell>
+                    <TableCell>
+                      {(userRole === "admin" || userRole === "staff_admin") ? (
+                        <div className="space-y-1">
+                          <Input
+                            value={item.polish_product_name || ''}
+                            onChange={(e) => handleUpdateItem(item.id, 'polish_product_name', e.target.value)}
+                            placeholder="Polska nazwa produktu"
+                            className="w-48"
+                          />
+                          {item.product_name && (!item.polish_product_name || item.polish_product_name !== item.product_name) && (
+                            <div className="text-xs text-muted-foreground">
+                              Klient: {item.product_name}
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="space-y-1">
+                          <span className="text-sm font-medium">
+                            {item.polish_product_name || item.product_name}
+                          </span>
+                          {item.polish_product_name && item.polish_product_name !== item.product_name && (
+                            <div className="text-xs text-muted-foreground">
+                              (Klient: {item.product_name})
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </TableCell>
                     <TableCell>
                       {item.website_url && (
                         <a

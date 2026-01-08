@@ -45,7 +45,8 @@ export default function WarehousePage() {
               *,
               order:orders(
                 number,
-                company:companies(name)
+                company:companies(name),
+                created_by_profile:profiles!created_by(full_name, email)
               )
             )
           )
@@ -76,6 +77,7 @@ export default function WarehousePage() {
               unit_cost_pln: item.unit_cost_pln,
               order_number: item.order_item.order.number,
               customer_name: item.order_item.order.company.name,
+              customer_profile: item.order_item.order.created_by_profile,
             });
           });
         });
@@ -123,6 +125,7 @@ export default function WarehousePage() {
             id,
             number,
             company:companies(name),
+            created_by_profile:profiles!created_by(full_name, email),
             dispatched_at,
             planned_delivery_date,
             updated_at
@@ -525,8 +528,8 @@ export default function WarehousePage() {
                         {delivery.items.map((item: any) => (
                           <TableRow key={item.supplier_order_item_id} className={item.quantity_received > 0 ? "bg-green-50" : ""}>
                             <TableCell className="font-medium">
-                              <div className="max-w-[200px] truncate" title={item.product_name}>
-                                {item.product_name}
+                              <div className="max-w-[200px] truncate" title={item.polish_product_name || item.product_name}>
+                                {item.polish_product_name || item.product_name}
                               </div>
                             </TableCell>
                             <TableCell className="text-sm">
@@ -536,7 +539,12 @@ export default function WarehousePage() {
                             </TableCell>
                             <TableCell className="hidden md:table-cell">
                               <div className="max-w-[150px] truncate" title={item.customer_name}>
-                                {item.customer_name}
+                                <div className="font-medium">{item.customer_name}</div>
+                                {item.customer_profile?.full_name && (
+                                  <div className="text-xs text-muted-foreground">
+                                    {item.customer_profile.full_name}
+                                  </div>
+                                )}
                               </div>
                             </TableCell>
                             <TableCell className="text-sm">
@@ -586,6 +594,7 @@ export default function WarehousePage() {
                         <CardTitle className="text-lg md:text-xl">Zamówienie: {order.number || order.order_number || "Brak numeru"}</CardTitle>
                         <p className="text-sm text-muted-foreground">
                           Klient: {order.company.name}
+                          {order.created_by_profile?.full_name && ` • ${order.created_by_profile.full_name}`}
                         </p>
                         <p className="text-sm text-muted-foreground">
                           Data: {formatDate(order.created_at)}
@@ -673,8 +682,8 @@ export default function WarehousePage() {
                             >
                               <TableCell className="text-sm w-12">{item.line_number}</TableCell>
                               <TableCell className="font-medium min-w-[150px] max-w-[200px]">
-                                <div className="truncate" title={item.product_name}>
-                                  {item.product_name}
+                                <div className="truncate" title={item.polish_product_name || item.product_name}>
+                                  {item.polish_product_name || item.product_name}
                                 </div>
                               </TableCell>
                               <TableCell className="hidden md:table-cell text-sm min-w-[100px] max-w-[120px]">
@@ -734,6 +743,7 @@ export default function WarehousePage() {
                         <h3 className="font-semibold text-lg">Zamówienie: {order.number}</h3>
                         <p className="text-sm text-muted-foreground">
                           Klient: {order.company.name}
+                          {order.created_by_profile?.full_name && ` • ${order.created_by_profile.full_name}`}
                         </p>
                         <p className="text-sm text-muted-foreground">
                           Data wysyłki: {formatDate(order.dispatched_at || order.updated_at)}
