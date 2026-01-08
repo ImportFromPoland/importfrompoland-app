@@ -64,25 +64,45 @@ export default function WarehousePage() {
               supplier: supplierOrder.supplier_name,
               order_date: supplierOrder.order_date,
               supplier_order_id: supplierOrder.id,
-              items: []
+              items: [],
+              itemIds: new Set() // Track added items to prevent duplicates
             });
           }
           
           supplierOrder.supplier_order_items?.forEach((item: any) => {
-            deliveryMap.get(key).items.push({
-              ...item.order_item,
-              supplier_order_item_id: item.id,
-              quantity_ordered: item.quantity_ordered,
-              quantity_received: item.quantity_received,
-              unit_cost_pln: item.unit_cost_pln,
-              order_number: item.order_item.order.number,
-              customer_name: item.order_item.order.company.name,
-              customer_profile: item.order_item.order.created_by_profile,
-            });
+            // Skip if order_item is missing or invalid
+            if (!item || !item.order_item || !item.id) {
+              return;
+            }
+            
+            // Use supplier_order_item_id as unique identifier to prevent duplicates
+            const itemId = item.id;
+            const delivery = deliveryMap.get(key);
+            
+            // Only add if not already added
+            if (!delivery.itemIds.has(itemId)) {
+              delivery.itemIds.add(itemId);
+              delivery.items.push({
+                ...item.order_item,
+                supplier_order_item_id: item.id,
+                quantity_ordered: item.quantity_ordered,
+                quantity_received: item.quantity_received,
+                unit_cost_pln: item.unit_cost_pln,
+                order_number: item.order_item.order?.number,
+                customer_name: item.order_item.order?.company?.name,
+                customer_profile: item.order_item.order?.created_by_profile,
+              });
+            }
           });
         });
 
-        setDeliveries(Array.from(deliveryMap.values()));
+        // Remove itemIds from final result (it was only for tracking)
+        const deliveries = Array.from(deliveryMap.values()).map(delivery => {
+          const { itemIds, ...rest } = delivery;
+          return rest;
+        });
+        
+        setDeliveries(deliveries);
 
         // Get all orders first to see what statuses exist
         const { data: allOrders, error: allOrdersError } = await supabase
