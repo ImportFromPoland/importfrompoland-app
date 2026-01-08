@@ -82,6 +82,12 @@ export default function WarehousePage() {
               return;
             }
             
+            // Skip items that have already been received in warehouse
+            // This ensures each item only appears once in deliveries, even if re-ordered
+            if (item.order_item.received_in_warehouse === true) {
+              return;
+            }
+            
             // Use supplier_order_item_id as unique identifier to prevent duplicates
             const itemId = item.id;
             const delivery = deliveryMap.get(key);
