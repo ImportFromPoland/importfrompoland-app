@@ -45,6 +45,7 @@ export default function WarehousePage() {
               *,
               order:orders(
                 number,
+                status,
                 company:companies(name),
                 created_by_profile:profiles!created_by(full_name, email)
               )
@@ -75,6 +76,12 @@ export default function WarehousePage() {
               return;
             }
             
+            // Skip items from orders that are already dispatched, delivered, or cancelled
+            const orderStatus = item.order_item.order?.status;
+            if (orderStatus && ['dispatched', 'delivered', 'cancelled'].includes(orderStatus)) {
+              return;
+            }
+            
             // Use supplier_order_item_id as unique identifier to prevent duplicates
             const itemId = item.id;
             const delivery = deliveryMap.get(key);
@@ -97,10 +104,13 @@ export default function WarehousePage() {
         });
 
         // Remove itemIds from final result (it was only for tracking)
-        const deliveries = Array.from(deliveryMap.values()).map(delivery => {
-          const { itemIds, ...rest } = delivery;
-          return rest;
-        });
+        // Also filter out deliveries that have no items (all items were from dispatched/delivered orders)
+        const deliveries = Array.from(deliveryMap.values())
+          .map(delivery => {
+            const { itemIds, ...rest } = delivery;
+            return rest;
+          })
+          .filter(delivery => delivery.items.length > 0); // Only keep deliveries with items
         
         setDeliveries(deliveries);
 
