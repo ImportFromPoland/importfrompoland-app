@@ -18,7 +18,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { formatDate } from "@/lib/utils";
-import { Package, Truck, Printer, CheckCircle2, Clock } from "lucide-react";
+import { Package, Truck, Printer, CheckCircle2, Clock, FileText } from "lucide-react";
 
 export default function WarehousePage() {
   const supabase = createClient();
@@ -110,6 +110,7 @@ export default function WarehousePage() {
           .select(`
             *,
             company:companies(*),
+            created_by_profile:profiles!created_by(full_name, email),
             items:order_items(
               *,
               supplier_order_items(
@@ -135,7 +136,25 @@ export default function WarehousePage() {
             (o.status === "paid" || o.items.some((item: any) => item.received_in_warehouse))
           );
           
-          setPackingOrders(filteredOrders);
+          // Sort orders: those with all items received but not all packed go to the end
+          const sortedOrders = filteredOrders.sort((a, b) => {
+            const aAllReceived = a.items.every((item: any) => item.received_in_warehouse);
+            const aAllPacked = a.items.every((item: any) => item.packed);
+            const bAllReceived = b.items.every((item: any) => item.received_in_warehouse);
+            const bAllPacked = b.items.every((item: any) => item.packed);
+            
+            // Orders with all received but not all packed go to the end
+            const aShouldBeLast = aAllReceived && !aAllPacked;
+            const bShouldBeLast = bAllReceived && !bAllPacked;
+            
+            if (aShouldBeLast && !bShouldBeLast) return 1;
+            if (!aShouldBeLast && bShouldBeLast) return -1;
+            
+            // Otherwise sort by creation date (newest first)
+            return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+          });
+          
+          setPackingOrders(sortedOrders);
         }
 
         // Load sent orders (dispatched status)
@@ -265,6 +284,65 @@ export default function WarehousePage() {
       }
     } catch (error: any) {
       alert("Błąd: " + error.message);
+    }
+  };
+
+  const generateDeliveryPDF = async (delivery: any) => {
+    try {
+      const { pdf } = await import('@react-pdf/renderer');
+      const { WarehouseDeliveryPDF } = await import('@/components/WarehousePDF');
+      const React = await import('react');
+
+      const blob = await pdf(
+        React.createElement(WarehouseDeliveryPDF, {
+          supplier: delivery.supplier,
+          orderDate: delivery.order_date,
+          items: delivery.items,
+          type: 'incoming'
+        }) as any
+      ).toBlob();
+
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `Dostawa_${delivery.supplier}_${delivery.order_date}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (error: any) {
+      console.error('PDF generation error:', error);
+      alert("Błąd podczas generowania PDF: " + error.message);
+    }
+  };
+
+  const generateOrderPDF = async (order: any) => {
+    try {
+      const { pdf } = await import('@react-pdf/renderer');
+      const { WarehouseDeliveryPDF } = await import('@/components/WarehousePDF');
+      const React = await import('react');
+
+      const blob = await pdf(
+        React.createElement(WarehouseDeliveryPDF, {
+          supplier: '',
+          orderDate: order.created_at,
+          items: [],
+          type: 'outgoing',
+          order: order
+        }) as any
+      ).toBlob();
+
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `Zamowienie_${order.number || order.id}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (error: any) {
+      console.error('PDF generation error:', error);
+      alert("Błąd podczas generowania PDF: " + error.message);
     }
   };
 
@@ -523,6 +601,14 @@ export default function WarehousePage() {
                       <Button
                         size="sm"
                         variant="outline"
+                        onClick={() => generateDeliveryPDF(delivery)}
+                      >
+                        <FileText className="h-4 w-4 mr-1" />
+                        PDF
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
                         onClick={() => handleConfirmDelivery(delivery.supplier_order_id)}
                         disabled={delivery.items.some((item: any) => item.quantity_received === 0)}
                       >
@@ -624,6 +710,14 @@ export default function WarehousePage() {
                         <Badge variant="outline" className="text-xs w-fit">
                           {packedCount} / {order.items.length} spakowane
                         </Badge>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => generateOrderPDF(order)}
+                        >
+                          <FileText className="h-4 w-4 sm:mr-1" />
+                          <span className="hidden xs:inline">PDF</span>
+                        </Button>
                         {allPacked && (
                           <div className="flex flex-col sm:flex-row gap-2">
                             <div className="flex items-center gap-2">
