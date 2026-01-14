@@ -29,8 +29,9 @@ export default async function DashboardPage() {
     .eq("id", user.id)
     .single();
 
-  // Check if onboarding needed
-  if (!profile?.company_id) {
+  // Only redirect to onboarding if profile exists and has no company_id
+  // Don't redirect if profile is null (could be RLS issue or profile doesn't exist)
+  if (profile && !profile.company_id) {
     redirect("/onboarding");
   }
 
