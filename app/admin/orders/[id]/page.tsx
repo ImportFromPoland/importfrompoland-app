@@ -131,7 +131,7 @@ export default function AdminOrderDetailPage() {
   // Calculate totals locally for instant updates
   const calculatedTotals = useMemo(() => {
     if (!order || !items || items.length === 0) {
-      return totals; // Fallback to database totals
+      return totals || null; // Fallback to database totals
     }
 
     let itemsNet = 0;
@@ -149,12 +149,12 @@ export default function AdminOrderDetailPage() {
         let lineGrossEUR = lineGrossPLN;
         
         // Convert PLN to EUR if needed
-        if (item.currency === "PLN" && order.currency === "EUR") {
+        if (item.currency === "PLN" && order?.currency === "EUR") {
           lineGrossEUR = lineGrossPLN * PLN_TO_EUR_RATE;
         }
         
         // Calculate NET from GROSS (remove VAT)
-        const effectiveVatRate = item.vat_rate_override || order.vat_rate || 23;
+        const effectiveVatRate = item.vat_rate_override || order?.vat_rate || 23;
         lineNet = lineGrossEUR / (1 + effectiveVatRate / 100);
       }
 
@@ -167,15 +167,15 @@ export default function AdminOrderDetailPage() {
     });
 
     // Apply header modifiers
-    const headerDiscountPercent = order.discount_percent || 0;
-    const headerMarkupPercent = order.markup_percent || 0;
+    const headerDiscountPercent = order?.discount_percent || 0;
+    const headerMarkupPercent = order?.markup_percent || 0;
     const itemsNetAfterHeader =
       itemsNet * (1 - headerDiscountPercent / 100) * (1 + headerMarkupPercent / 100);
 
-    const vatRate = order.vat_rate || 23;
+    const vatRate = order?.vat_rate || 23;
     const vatAmount = (itemsNetAfterHeader * vatRate) / 100;
     const itemsGross = itemsNetAfterHeader + vatAmount;
-    const shippingCost = order.shipping_cost || 0;
+    const shippingCost = order?.shipping_cost || 0;
     const grandTotal = itemsGross + shippingCost;
 
     return {
