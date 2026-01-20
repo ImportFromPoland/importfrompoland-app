@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
@@ -12,6 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatusBadge } from "@/components/StatusBadge";
 import { formatDate, formatCurrency } from "@/lib/utils";
 import { TotalsPanel } from "@/components/TotalsPanel";
+import { PLN_TO_EUR_RATE } from "@/lib/constants";
 import {
   Table,
   TableBody,
@@ -115,16 +116,76 @@ export default function AdminOrderDetailPage() {
 
       if (error) throw error;
 
-      // Update local state
-      setItems(items.map((item) => (item.id === itemId ? { ...item, ...updates } : item)));
+      // Update local state immediately for instant UI update
+      const updatedItems = items.map((item) => (item.id === itemId ? { ...item, ...updates } : item));
+      setItems(updatedItems);
       setEditingItemId(null);
       
-      // Reload to get fresh totals
-      await loadData();
+      // Reload to get fresh totals from database (async, won't block UI)
+      loadData();
     } catch (error: any) {
       alert("Error updating item: " + error.message);
     }
   };
+
+  // Calculate totals locally for instant updates
+  const calculatedTotals = useMemo(() => {
+    if (!order || !items || items.length === 0) {
+      return totals; // Fallback to database totals
+    }
+
+    let itemsNet = 0;
+
+    items.forEach((item) => {
+      let lineNet = 0;
+      
+      // Check if we have original_net_price (from database)
+      if (item.original_net_price) {
+        // Use stored original net price (maintains consistency when VAT changes)
+        lineNet = item.original_net_price * item.quantity;
+      } else {
+        // Calculate NET from current gross price (for new items)
+        let lineGrossPLN = item.unit_price * item.quantity;
+        let lineGrossEUR = lineGrossPLN;
+        
+        // Convert PLN to EUR if needed
+        if (item.currency === "PLN" && order.currency === "EUR") {
+          lineGrossEUR = lineGrossPLN * PLN_TO_EUR_RATE;
+        }
+        
+        // Calculate NET from GROSS (remove VAT)
+        const effectiveVatRate = item.vat_rate_override || order.vat_rate || 23;
+        lineNet = lineGrossEUR / (1 + effectiveVatRate / 100);
+      }
+
+      // Apply line discount to NET
+      if (item.discount_percent > 0) {
+        lineNet = lineNet * (1 - item.discount_percent / 100);
+      }
+
+      itemsNet += lineNet;
+    });
+
+    // Apply header modifiers
+    const headerDiscountPercent = order.discount_percent || 0;
+    const headerMarkupPercent = order.markup_percent || 0;
+    const itemsNetAfterHeader =
+      itemsNet * (1 - headerDiscountPercent / 100) * (1 + headerMarkupPercent / 100);
+
+    const vatRate = order.vat_rate || 23;
+    const vatAmount = (itemsNetAfterHeader * vatRate) / 100;
+    const itemsGross = itemsNetAfterHeader + vatAmount;
+    const shippingCost = order.shipping_cost || 0;
+    const grandTotal = itemsGross + shippingCost;
+
+    return {
+      items_net: itemsNetAfterHeader,
+      subtotal_without_vat: itemsNetAfterHeader,
+      vat_amount: vatAmount,
+      items_gross: itemsGross,
+      grand_total: grandTotal,
+    };
+  }, [items, order, totals]);
 
   const deleteItem = async (itemId: string) => {
     if (!confirm("Are you sure you want to delete this item?")) return;
@@ -677,7 +738,7 @@ export default function AdminOrderDetailPage() {
         {/* Sidebar */}
         <div className="space-y-6">
           {/* Order Totals */}
-          {totals && (
+          {(calculatedTotals || totals) && (
             <Card>
               <CardHeader>
                 <CardTitle>Order Summary</CardTitle>
@@ -685,11 +746,11 @@ export default function AdminOrderDetailPage() {
               <CardContent className="space-y-3">
                 <div className="flex justify-between text-sm">
                   <span>Subtotal (excl. VAT):</span>
-                  <span className="font-medium">{formatCurrency(totals.items_net || 0, order.currency)}</span>
+                  <span className="font-medium">{formatCurrency((calculatedTotals?.items_net || totals?.items_net || 0), order.currency)}</span>
                 </div>
                 <div className="flex justify-between text-sm">
                   <span>VAT ({order.vat_rate}%):</span>
-                  <span className="font-medium">{formatCurrency(totals.vat_amount || 0, order.currency)}</span>
+                  <span className="font-medium">{formatCurrency((calculatedTotals?.vat_amount || totals?.vat_amount || 0), order.currency)}</span>
                 </div>
                 {order.shipping_cost > 0 && (
                   <div className="flex justify-between text-sm">
@@ -699,7 +760,7 @@ export default function AdminOrderDetailPage() {
                 )}
                 <div className="border-t pt-3 flex justify-between text-lg font-bold">
                   <span>Grand Total:</span>
-                  <span className="text-primary">{formatCurrency(totals.grand_total || 0, order.currency)}</span>
+                  <span className="text-primary">{formatCurrency((calculatedTotals?.grand_total || totals?.grand_total || 0), order.currency)}</span>
                 </div>
               </CardContent>
             </Card>
@@ -846,13 +907,13 @@ export default function AdminOrderDetailPage() {
                   </div>
                   <div className="flex justify-between text-sm font-semibold text-orange-900">
                     <span>Client Pays:</span>
-                    <span>{formatCurrency(totals?.grand_total || 0, order.currency)}</span>
+                    <span>{formatCurrency((calculatedTotals?.grand_total || totals?.grand_total || 0), order.currency)}</span>
                   </div>
                   <div className="flex justify-between text-lg font-bold pt-2 border-t">
                     <span>Net Profit:</span>
-                    <span className={(totals?.grand_total || 0) - ((items.reduce((sum, item) => sum + ((item.net_cost_pln || 0) * item.quantity) + ((item.logistics_cost_pln || 0) * item.quantity), 0) / 4.2) + (order.logistics_cost || 0) + ((order.transport_cost_pln || 0) / 4.2)) >= 0 ? "text-green-600" : "text-red-600"}>
+                    <span className={((calculatedTotals?.grand_total || totals?.grand_total || 0) - ((items.reduce((sum, item) => sum + ((item.net_cost_pln || 0) * item.quantity) + ((item.logistics_cost_pln || 0) * item.quantity), 0) / 4.2) + (order.logistics_cost || 0) + ((order.transport_cost_pln || 0) / 4.2)) >= 0 ? "text-green-600" : "text-red-600"}>
                       {formatCurrency(
-                        (totals?.grand_total || 0) - ((items.reduce((sum, item) => sum + ((item.net_cost_pln || 0) * item.quantity) + ((item.logistics_cost_pln || 0) * item.quantity), 0) / 4.2) + (order.logistics_cost || 0) + ((order.transport_cost_pln || 0) / 4.2)),
+                        ((calculatedTotals?.grand_total || totals?.grand_total || 0) - ((items.reduce((sum, item) => sum + ((item.net_cost_pln || 0) * item.quantity) + ((item.logistics_cost_pln || 0) * item.quantity), 0) / 4.2) + (order.logistics_cost || 0) + ((order.transport_cost_pln || 0) / 4.2))),
                         "EUR"
                       )}
                     </span>
