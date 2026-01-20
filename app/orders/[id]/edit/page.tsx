@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -149,7 +149,7 @@ export default function EditOrderPage() {
     setLines(newLines);
   };
 
-  const calculateTotals = () => {
+  const totals = useMemo(() => {
     let itemsNet = 0;
 
     lines.forEach((line) => {
@@ -191,9 +191,7 @@ export default function EditOrderPage() {
       itemsGross,
       grandTotal,
     };
-  };
-
-  const totals = calculateTotals();
+  }, [lines, vatRate, shippingCost, headerDiscountPercent, headerMarkupPercent, currency]);
 
   const saveChanges = async () => {
     if (!order) return;
