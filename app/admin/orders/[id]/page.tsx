@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
@@ -128,9 +128,8 @@ export default function AdminOrderDetailPage() {
     }
   };
 
-  // Calculate totals locally for instant updates
-  // Must be before conditional returns (React hooks rule)
-  const calculatedTotals = useMemo(() => {
+  // Calculate totals function (not a hook, can be called conditionally)
+  const calculateTotals = () => {
     if (!order || !items || items.length === 0) {
       return totals || null; // Fallback to database totals
     }
@@ -150,12 +149,12 @@ export default function AdminOrderDetailPage() {
         let lineGrossEUR = lineGrossPLN;
         
         // Convert PLN to EUR if needed
-        if (item.currency === "PLN" && order?.currency === "EUR") {
+        if (item.currency === "PLN" && order.currency === "EUR") {
           lineGrossEUR = lineGrossPLN * PLN_TO_EUR_RATE;
         }
         
         // Calculate NET from GROSS (remove VAT)
-        const effectiveVatRate = item.vat_rate_override || order?.vat_rate || 23;
+        const effectiveVatRate = item.vat_rate_override || order.vat_rate || 23;
         lineNet = lineGrossEUR / (1 + effectiveVatRate / 100);
       }
 
@@ -168,15 +167,15 @@ export default function AdminOrderDetailPage() {
     });
 
     // Apply header modifiers
-    const headerDiscountPercent = order?.discount_percent || 0;
-    const headerMarkupPercent = order?.markup_percent || 0;
+    const headerDiscountPercent = order.discount_percent || 0;
+    const headerMarkupPercent = order.markup_percent || 0;
     const itemsNetAfterHeader =
       itemsNet * (1 - headerDiscountPercent / 100) * (1 + headerMarkupPercent / 100);
 
-    const vatRate = order?.vat_rate || 23;
+    const vatRate = order.vat_rate || 23;
     const vatAmount = (itemsNetAfterHeader * vatRate) / 100;
     const itemsGross = itemsNetAfterHeader + vatAmount;
-    const shippingCost = order?.shipping_cost || 0;
+    const shippingCost = order.shipping_cost || 0;
     const grandTotal = itemsGross + shippingCost;
 
     return {
@@ -186,7 +185,7 @@ export default function AdminOrderDetailPage() {
       items_gross: itemsGross,
       grand_total: grandTotal,
     };
-  }, [items, order, totals]);
+  };
 
   const deleteItem = async (itemId: string) => {
     if (!confirm("Are you sure you want to delete this item?")) return;
@@ -396,6 +395,9 @@ export default function AdminOrderDetailPage() {
       </div>
     );
   }
+
+  // Calculate totals for display (called after order check)
+  const calculatedTotals = calculateTotals();
 
   return (
     <div className="space-y-6">
