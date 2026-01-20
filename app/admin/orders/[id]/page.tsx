@@ -396,9 +396,6 @@ export default function AdminOrderDetailPage() {
     );
   }
 
-  // Calculate totals for display (called after order check)
-  const calculatedTotals = calculateTotals();
-
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -741,33 +738,37 @@ export default function AdminOrderDetailPage() {
         {/* Sidebar */}
         <div className="space-y-6">
           {/* Order Totals */}
-          {(calculatedTotals || totals) && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Order Summary</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="flex justify-between text-sm">
-                  <span>Subtotal (excl. VAT):</span>
-                  <span className="font-medium">{formatCurrency((calculatedTotals?.items_net || totals?.items_net || 0), order.currency)}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span>VAT ({order.vat_rate}%):</span>
-                  <span className="font-medium">{formatCurrency((calculatedTotals?.vat_amount || totals?.vat_amount || 0), order.currency)}</span>
-                </div>
-                {order.shipping_cost > 0 && (
+          {(() => {
+            const calculatedTotals = calculateTotals();
+            const displayTotals = calculatedTotals || totals;
+            return displayTotals && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Order Summary</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
                   <div className="flex justify-between text-sm">
-                    <span>Shipping:</span>
-                    <span className="font-medium">{formatCurrency(order.shipping_cost, order.currency)}</span>
+                    <span>Subtotal (excl. VAT):</span>
+                    <span className="font-medium">{formatCurrency((displayTotals.items_net || 0), order.currency)}</span>
                   </div>
-                )}
-                <div className="border-t pt-3 flex justify-between text-lg font-bold">
-                  <span>Grand Total:</span>
-                  <span className="text-primary">{formatCurrency((calculatedTotals?.grand_total || totals?.grand_total || 0), order.currency)}</span>
-                </div>
-              </CardContent>
-            </Card>
-          )}
+                  <div className="flex justify-between text-sm">
+                    <span>VAT ({order.vat_rate}%):</span>
+                    <span className="font-medium">{formatCurrency((displayTotals.vat_amount || 0), order.currency)}</span>
+                  </div>
+                  {order.shipping_cost > 0 && (
+                    <div className="flex justify-between text-sm">
+                      <span>Shipping:</span>
+                      <span className="font-medium">{formatCurrency(order.shipping_cost, order.currency)}</span>
+                    </div>
+                  )}
+                  <div className="border-t pt-3 flex justify-between text-lg font-bold">
+                    <span>Grand Total:</span>
+                    <span className="text-primary">{formatCurrency((displayTotals.grand_total || 0), order.currency)}</span>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })()}
 
           {/* Order Settings */}
           <Card>
@@ -910,13 +911,26 @@ export default function AdminOrderDetailPage() {
                   </div>
                   <div className="flex justify-between text-sm font-semibold text-orange-900">
                     <span>Client Pays:</span>
-                    <span>{formatCurrency((calculatedTotals?.grand_total || totals?.grand_total || 0), order.currency)}</span>
+                    <span>{formatCurrency(((() => {
+                      const calculatedTotals = calculateTotals();
+                      return (calculatedTotals?.grand_total || totals?.grand_total || 0);
+                    })()), order.currency)}</span>
                   </div>
                   <div className="flex justify-between text-lg font-bold pt-2 border-t">
                     <span>Net Profit:</span>
-                    <span className={((calculatedTotals?.grand_total || totals?.grand_total || 0) - ((items.reduce((sum, item) => sum + ((item.net_cost_pln || 0) * item.quantity) + ((item.logistics_cost_pln || 0) * item.quantity), 0) / 4.2) + (order.logistics_cost || 0) + ((order.transport_cost_pln || 0) / 4.2)) >= 0 ? "text-green-600" : "text-red-600"}>
+                    <span className={(() => {
+                      const calculatedTotals = calculateTotals();
+                      const grandTotal = calculatedTotals?.grand_total || totals?.grand_total || 0;
+                      const totalCosts = (items.reduce((sum, item) => sum + ((item.net_cost_pln || 0) * item.quantity) + ((item.logistics_cost_pln || 0) * item.quantity), 0) / 4.2) + (order.logistics_cost || 0) + ((order.transport_cost_pln || 0) / 4.2);
+                      return (grandTotal - totalCosts) >= 0 ? "text-green-600" : "text-red-600";
+                    })()}>
                       {formatCurrency(
-                        ((calculatedTotals?.grand_total || totals?.grand_total || 0) - ((items.reduce((sum, item) => sum + ((item.net_cost_pln || 0) * item.quantity) + ((item.logistics_cost_pln || 0) * item.quantity), 0) / 4.2) + (order.logistics_cost || 0) + ((order.transport_cost_pln || 0) / 4.2))),
+                        (() => {
+                          const calculatedTotals = calculateTotals();
+                          const grandTotal = calculatedTotals?.grand_total || totals?.grand_total || 0;
+                          const totalCosts = (items.reduce((sum, item) => sum + ((item.net_cost_pln || 0) * item.quantity) + ((item.logistics_cost_pln || 0) * item.quantity), 0) / 4.2) + (order.logistics_cost || 0) + ((order.transport_cost_pln || 0) / 4.2);
+                          return grandTotal - totalCosts;
+                        })(),
                         "EUR"
                       )}
                     </span>
