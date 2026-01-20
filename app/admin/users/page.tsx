@@ -73,20 +73,8 @@ export default function AdminUsersPage() {
         `)
         .order("created_at", { ascending: false });
 
-      // Get auth users to get emails
-      const { data: authUsers } = await supabase.auth.admin.listUsers();
-
-      // Merge profile data with auth data
-      const mergedUsers = (profiles || []).map((profile) => {
-        const authUser = authUsers?.users.find((u) => u.id === profile.id);
-        return {
-          ...profile,
-          email: authUser?.email,
-          email_confirmed_at: authUser?.email_confirmed_at,
-        };
-      });
-
-      setUsers(mergedUsers);
+      // Use email directly from profiles table (it already has email column)
+      setUsers(profiles || []);
     } catch (error) {
       console.error("Error loading users:", error);
     } finally {
@@ -232,15 +220,9 @@ export default function AdminUsersPage() {
                         </Badge>
                       </TableCell>
                       <TableCell>
-                        {user.email_confirmed_at ? (
-                          <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
-                            Confirmed
-                          </Badge>
-                        ) : (
-                          <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200">
-                            Pending
-                          </Badge>
-                        )}
+                        <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+                          Active
+                        </Badge>
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">
                         {formatDate(user.created_at)}
