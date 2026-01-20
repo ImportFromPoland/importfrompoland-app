@@ -128,6 +128,58 @@ export default function AdminOrderDetailPage() {
     }
   };
 
+  const saveBasket = async () => {
+    if (!order || !items || items.length === 0) {
+      alert("No items to save");
+      return;
+    }
+
+    try {
+      // Recalculate original_net_price for all items based on current unit_price
+      const updates = items.map((item) => {
+        let originalNetPrice = 0;
+        
+        // Calculate original net price from gross price with default 23% VAT
+        if (item.currency === "PLN" && order.currency === "EUR") {
+          const grossEUR = item.unit_price * PLN_TO_EUR_RATE;
+          originalNetPrice = grossEUR / 1.23; // Remove 23% VAT
+        } else if (item.currency === order.currency) {
+          originalNetPrice = item.unit_price / 1.23; // Remove 23% VAT
+        } else {
+          originalNetPrice = item.unit_price / 1.23; // Remove 23% VAT
+        }
+
+        return {
+          id: item.id,
+          original_net_price: originalNetPrice,
+        };
+      });
+
+      // Update all items in parallel
+      const updatePromises = updates.map((update) =>
+        supabase
+          .from("order_items")
+          .update({ original_net_price: update.original_net_price })
+          .eq("id", update.id)
+      );
+
+      const results = await Promise.all(updatePromises);
+      
+      // Check for errors
+      const errors = results.filter((result) => result.error);
+      if (errors.length > 0) {
+        throw new Error(`Failed to update ${errors.length} item(s)`);
+      }
+
+      // Reload data to refresh totals from database
+      await loadData();
+      
+      alert("Basket saved successfully! Totals have been recalculated.");
+    } catch (error: any) {
+      alert("Error saving basket: " + error.message);
+    }
+  };
+
   // Calculate totals function (not a hook, can be called conditionally)
   const calculateTotals = () => {
     if (!order || !items || items.length === 0) {
@@ -418,6 +470,14 @@ export default function AdminOrderDetailPage() {
         </div>
         <div className="flex items-center gap-3">
           <StatusBadge status={order.status} />
+          
+          {/* Save Basket button - available for draft and submitted orders */}
+          {["draft", "submitted"].includes(order.status) && (
+            <Button onClick={saveBasket} variant="outline" className="bg-blue-50 hover:bg-blue-100 border-blue-300">
+              <Save className="h-4 w-4 mr-2" />
+              Save Basket
+            </Button>
+          )}
           
           {/* Action Buttons based on status */}
           {order.status === "submitted" && (
