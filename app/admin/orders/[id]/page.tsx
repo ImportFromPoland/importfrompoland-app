@@ -128,6 +128,66 @@ export default function AdminOrderDetailPage() {
     }
   };
 
+  // Calculate totals locally for instant updates
+  // Must be before conditional returns (React hooks rule)
+  const calculatedTotals = useMemo(() => {
+    if (!order || !items || items.length === 0) {
+      return totals || null; // Fallback to database totals
+    }
+
+    let itemsNet = 0;
+
+    items.forEach((item) => {
+      let lineNet = 0;
+      
+      // Check if we have original_net_price (from database)
+      if (item.original_net_price) {
+        // Use stored original net price (maintains consistency when VAT changes)
+        lineNet = item.original_net_price * item.quantity;
+      } else {
+        // Calculate NET from current gross price (for new items)
+        let lineGrossPLN = item.unit_price * item.quantity;
+        let lineGrossEUR = lineGrossPLN;
+        
+        // Convert PLN to EUR if needed
+        if (item.currency === "PLN" && order?.currency === "EUR") {
+          lineGrossEUR = lineGrossPLN * PLN_TO_EUR_RATE;
+        }
+        
+        // Calculate NET from GROSS (remove VAT)
+        const effectiveVatRate = item.vat_rate_override || order?.vat_rate || 23;
+        lineNet = lineGrossEUR / (1 + effectiveVatRate / 100);
+      }
+
+      // Apply line discount to NET
+      if (item.discount_percent > 0) {
+        lineNet = lineNet * (1 - item.discount_percent / 100);
+      }
+
+      itemsNet += lineNet;
+    });
+
+    // Apply header modifiers
+    const headerDiscountPercent = order?.discount_percent || 0;
+    const headerMarkupPercent = order?.markup_percent || 0;
+    const itemsNetAfterHeader =
+      itemsNet * (1 - headerDiscountPercent / 100) * (1 + headerMarkupPercent / 100);
+
+    const vatRate = order?.vat_rate || 23;
+    const vatAmount = (itemsNetAfterHeader * vatRate) / 100;
+    const itemsGross = itemsNetAfterHeader + vatAmount;
+    const shippingCost = order?.shipping_cost || 0;
+    const grandTotal = itemsGross + shippingCost;
+
+    return {
+      items_net: itemsNetAfterHeader,
+      subtotal_without_vat: itemsNetAfterHeader,
+      vat_amount: vatAmount,
+      items_gross: itemsGross,
+      grand_total: grandTotal,
+    };
+  }, [items, order, totals]);
+
   const deleteItem = async (itemId: string) => {
     if (!confirm("Are you sure you want to delete this item?")) return;
 
@@ -336,65 +396,6 @@ export default function AdminOrderDetailPage() {
       </div>
     );
   }
-
-  // Calculate totals locally for instant updates
-  const calculatedTotals = useMemo(() => {
-    if (!order || !items || items.length === 0) {
-      return totals || null; // Fallback to database totals
-    }
-
-    let itemsNet = 0;
-
-    items.forEach((item) => {
-      let lineNet = 0;
-      
-      // Check if we have original_net_price (from database)
-      if (item.original_net_price) {
-        // Use stored original net price (maintains consistency when VAT changes)
-        lineNet = item.original_net_price * item.quantity;
-      } else {
-        // Calculate NET from current gross price (for new items)
-        let lineGrossPLN = item.unit_price * item.quantity;
-        let lineGrossEUR = lineGrossPLN;
-        
-        // Convert PLN to EUR if needed
-        if (item.currency === "PLN" && order.currency === "EUR") {
-          lineGrossEUR = lineGrossPLN * PLN_TO_EUR_RATE;
-        }
-        
-        // Calculate NET from GROSS (remove VAT)
-        const effectiveVatRate = item.vat_rate_override || order.vat_rate || 23;
-        lineNet = lineGrossEUR / (1 + effectiveVatRate / 100);
-      }
-
-      // Apply line discount to NET
-      if (item.discount_percent > 0) {
-        lineNet = lineNet * (1 - item.discount_percent / 100);
-      }
-
-      itemsNet += lineNet;
-    });
-
-    // Apply header modifiers
-    const headerDiscountPercent = order.discount_percent || 0;
-    const headerMarkupPercent = order.markup_percent || 0;
-    const itemsNetAfterHeader =
-      itemsNet * (1 - headerDiscountPercent / 100) * (1 + headerMarkupPercent / 100);
-
-    const vatRate = order.vat_rate || 23;
-    const vatAmount = (itemsNetAfterHeader * vatRate) / 100;
-    const itemsGross = itemsNetAfterHeader + vatAmount;
-    const shippingCost = order.shipping_cost || 0;
-    const grandTotal = itemsGross + shippingCost;
-
-    return {
-      items_net: itemsNetAfterHeader,
-      subtotal_without_vat: itemsNetAfterHeader,
-      vat_amount: vatAmount,
-      items_gross: itemsGross,
-      grand_total: grandTotal,
-    };
-  }, [items, order, totals]);
 
   return (
     <div className="space-y-6">
