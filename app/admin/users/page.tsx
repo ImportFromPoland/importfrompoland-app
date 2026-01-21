@@ -21,7 +21,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { formatDate } from "@/lib/utils";
-import { Shield, Users as UsersIcon } from "lucide-react";
+import { Shield, Users as UsersIcon, ChevronDown, ChevronRight } from "lucide-react";
 import SuperadminDeleteButton from "@/components/SuperadminDeleteButton";
 
 const ROLE_COLORS: Record<string, string> = {
@@ -43,6 +43,7 @@ export default function AdminUsersPage() {
   const [loading, setLoading] = useState(true);
   const [users, setUsers] = useState<any[]>([]);
   const [currentUser, setCurrentUser] = useState<any>(null);
+  const [expandedUsers, setExpandedUsers] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     loadUsers();
@@ -64,12 +65,12 @@ export default function AdminUsersPage() {
 
       setCurrentUser(profile);
 
-      // Get all users with their profiles and companies
+      // Get all users with their profiles and companies (all company fields)
       const { data: profiles } = await supabase
         .from("profiles")
         .select(`
           *,
-          company:companies(name)
+          company:companies(*)
         `)
         .order("created_at", { ascending: false });
 
@@ -80,6 +81,18 @@ export default function AdminUsersPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const toggleUserExpanded = (userId: string) => {
+    setExpandedUsers((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(userId)) {
+        newSet.delete(userId);
+      } else {
+        newSet.add(userId);
+      }
+      return newSet;
+    });
   };
 
   const updateUserRole = async (userId: string, newRole: string) => {
@@ -106,6 +119,73 @@ export default function AdminUsersPage() {
     } catch (error: any) {
       alert("Error updating role: " + error.message);
     }
+  };
+
+  const renderUserDetails = (user: any) => {
+    const hasCompanyData = user.company && (
+      user.company.phone ||
+      user.company.vat_number ||
+      user.company.address_line1 ||
+      user.company.address_line2 ||
+      user.company.city ||
+      user.company.postal_code ||
+      user.company.country
+    );
+
+    if (!hasCompanyData && !user.full_name) {
+      return null;
+    }
+
+    return (
+      <div className="bg-gray-50 p-4 space-y-3 text-sm">
+        {/* User Info */}
+        {user.full_name && (
+          <div>
+            <span className="font-semibold text-gray-700">Full Name:</span>{" "}
+            <span className="text-gray-600">{user.full_name}</span>
+          </div>
+        )}
+
+        {/* Company Info */}
+        {hasCompanyData && (
+          <div className="border-t pt-3 space-y-2">
+            <div className="font-semibold text-gray-700 mb-2">Company Details:</div>
+            
+            {user.company.phone && (
+              <div>
+                <span className="font-semibold text-gray-700">Phone:</span>{" "}
+                <span className="text-gray-600">{user.company.phone}</span>
+              </div>
+            )}
+
+            {user.company.vat_number && (
+              <div>
+                <span className="font-semibold text-gray-700">EU VAT Number:</span>{" "}
+                <span className="text-gray-600">{user.company.vat_number}</span>
+              </div>
+            )}
+
+            {(user.company.address_line1 || user.company.address_line2 || user.company.city || user.company.postal_code || user.company.country) && (
+              <div>
+                <span className="font-semibold text-gray-700">Address:</span>
+                <div className="text-gray-600 ml-2 mt-1">
+                  {user.company.address_line1 && <div>{user.company.address_line1}</div>}
+                  {user.company.address_line2 && <div>{user.company.address_line2}</div>}
+                  {(user.company.city || user.company.postal_code) && (
+                    <div>
+                      {user.company.city}
+                      {user.company.city && user.company.postal_code && ", "}
+                      {user.company.postal_code}
+                    </div>
+                  )}
+                  {user.company.country && <div>{user.company.country}</div>}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    );
   };
 
   if (loading) {
@@ -202,62 +282,85 @@ export default function AdminUsersPage() {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  users.map((user) => (
-                    <TableRow key={user.id} className="hover:bg-gray-50">
-                      <TableCell className="font-medium">
-                        {user.full_name || "-"}
-                        {user.id === currentUser?.id && (
-                          <Badge variant="outline" className="ml-2 text-xs">
-                            You
-                          </Badge>
+                  users.map((user) => {
+                    const isExpanded = expandedUsers.has(user.id);
+                    return (
+                      <>
+                        <TableRow 
+                          key={user.id} 
+                          className="hover:bg-gray-50 cursor-pointer"
+                          onClick={() => toggleUserExpanded(user.id)}
+                        >
+                          <TableCell className="font-medium">
+                            <div className="flex items-center gap-2">
+                              {isExpanded ? (
+                                <ChevronDown className="h-4 w-4 text-gray-400" />
+                              ) : (
+                                <ChevronRight className="h-4 w-4 text-gray-400" />
+                              )}
+                              {user.full_name || "-"}
+                              {user.id === currentUser?.id && (
+                                <Badge variant="outline" className="ml-2 text-xs">
+                                  You
+                                </Badge>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell>{user.email}</TableCell>
+                          <TableCell>{user.company?.name || "-"}</TableCell>
+                          <TableCell>
+                            <Badge className={ROLE_COLORS[user.role]}>
+                              {ROLE_LABELS[user.role]}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+                              Active
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground">
+                            {formatDate(user.created_at)}
+                          </TableCell>
+                          <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+                            <div className="flex items-center justify-end gap-2">
+                              <Select
+                                value={user.role}
+                                onValueChange={(newRole) => updateUserRole(user.id, newRole)}
+                                disabled={
+                                  user.id === currentUser?.id &&
+                                  currentUser?.role === "staff_admin"
+                                }
+                              >
+                                <SelectTrigger className="w-[140px]">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="client">Client</SelectItem>
+                                  <SelectItem value="admin">Administrator</SelectItem>
+                                  <SelectItem value="warehouse">Warehouse</SelectItem>
+                                  <SelectItem value="staff_admin">Superadmin</SelectItem>
+                                </SelectContent>
+                              </Select>
+                              {currentUser?.role === "staff_admin" && user.role === "client" && (
+                                <SuperadminDeleteButton
+                                  itemId={user.company_id}
+                                  itemType="client"
+                                  onDelete={() => loadUsers()}
+                                />
+                              )}
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                        {isExpanded && (
+                          <TableRow>
+                            <TableCell colSpan={7} className="p-0">
+                              {renderUserDetails(user)}
+                            </TableCell>
+                          </TableRow>
                         )}
-                      </TableCell>
-                      <TableCell>{user.email}</TableCell>
-                      <TableCell>{user.company?.name || "-"}</TableCell>
-                      <TableCell>
-                        <Badge className={ROLE_COLORS[user.role]}>
-                          {ROLE_LABELS[user.role]}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
-                          Active
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {formatDate(user.created_at)}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          <Select
-                            value={user.role}
-                            onValueChange={(newRole) => updateUserRole(user.id, newRole)}
-                            disabled={
-                              user.id === currentUser?.id &&
-                              currentUser?.role === "staff_admin"
-                            }
-                          >
-                            <SelectTrigger className="w-[140px]">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="client">Client</SelectItem>
-                              <SelectItem value="admin">Administrator</SelectItem>
-                              <SelectItem value="warehouse">Warehouse</SelectItem>
-                              <SelectItem value="staff_admin">Superadmin</SelectItem>
-                            </SelectContent>
-                          </Select>
-                          {currentUser?.role === "staff_admin" && user.role === "client" && (
-                            <SuperadminDeleteButton
-                              itemId={user.company_id}
-                              itemType="client"
-                              onDelete={() => loadUsers()}
-                            />
-                          )}
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))
+                      </>
+                    );
+                  })
                 )}
               </TableBody>
             </Table>
