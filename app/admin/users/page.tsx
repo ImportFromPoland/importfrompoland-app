@@ -282,84 +282,82 @@ export default function AdminUsersPage() {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  users.map((user) => {
+                  users.flatMap((user) => {
                     const isExpanded = expandedUsers.has(user.id);
-                    return (
-                      <>
-                        <TableRow 
-                          key={user.id} 
-                          className="hover:bg-gray-50 cursor-pointer"
-                          onClick={() => toggleUserExpanded(user.id)}
-                        >
-                          <TableCell className="font-medium">
-                            <div className="flex items-center gap-2">
-                              {isExpanded ? (
-                                <ChevronDown className="h-4 w-4 text-gray-400" />
-                              ) : (
-                                <ChevronRight className="h-4 w-4 text-gray-400" />
-                              )}
-                              {user.full_name || "-"}
-                              {user.id === currentUser?.id && (
-                                <Badge variant="outline" className="ml-2 text-xs">
-                                  You
-                                </Badge>
-                              )}
-                            </div>
-                          </TableCell>
-                          <TableCell>{user.email}</TableCell>
-                          <TableCell>{user.company?.name || "-"}</TableCell>
-                          <TableCell>
-                            <Badge className={ROLE_COLORS[user.role]}>
-                              {ROLE_LABELS[user.role]}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
-                              Active
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-sm text-muted-foreground">
-                            {formatDate(user.created_at)}
-                          </TableCell>
-                          <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
-                            <div className="flex items-center justify-end gap-2">
-                              <Select
-                                value={user.role}
-                                onValueChange={(newRole) => updateUserRole(user.id, newRole)}
-                                disabled={
-                                  user.id === currentUser?.id &&
-                                  currentUser?.role === "staff_admin"
-                                }
-                              >
-                                <SelectTrigger className="w-[140px]">
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="client">Client</SelectItem>
-                                  <SelectItem value="admin">Administrator</SelectItem>
-                                  <SelectItem value="warehouse">Warehouse</SelectItem>
-                                  <SelectItem value="staff_admin">Superadmin</SelectItem>
-                                </SelectContent>
-                              </Select>
-                              {currentUser?.role === "staff_admin" && user.role === "client" && (
-                                <SuperadminDeleteButton
-                                  itemId={user.company_id}
-                                  itemType="client"
-                                  onDelete={() => loadUsers()}
-                                />
-                              )}
-                            </div>
+                    return [
+                      <TableRow 
+                        key={user.id} 
+                        className="hover:bg-gray-50 cursor-pointer"
+                        onClick={() => toggleUserExpanded(user.id)}
+                      >
+                        <TableCell className="font-medium">
+                          <div className="flex items-center gap-2">
+                            {isExpanded ? (
+                              <ChevronDown className="h-4 w-4 text-gray-400" />
+                            ) : (
+                              <ChevronRight className="h-4 w-4 text-gray-400" />
+                            )}
+                            {user.full_name || "-"}
+                            {user.id === currentUser?.id && (
+                              <Badge variant="outline" className="ml-2 text-xs">
+                                You
+                              </Badge>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell>{user.email}</TableCell>
+                        <TableCell>{user.company?.name || "-"}</TableCell>
+                        <TableCell>
+                          <Badge className={ROLE_COLORS[user.role]}>
+                            {ROLE_LABELS[user.role]}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+                            Active
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground">
+                          {formatDate(user.created_at)}
+                        </TableCell>
+                        <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex items-center justify-end gap-2">
+                            <Select
+                              value={user.role}
+                              onValueChange={(newRole) => updateUserRole(user.id, newRole)}
+                              disabled={
+                                user.id === currentUser?.id &&
+                                currentUser?.role === "staff_admin"
+                              }
+                            >
+                              <SelectTrigger className="w-[140px]">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="client">Client</SelectItem>
+                                <SelectItem value="admin">Administrator</SelectItem>
+                                <SelectItem value="warehouse">Warehouse</SelectItem>
+                                <SelectItem value="staff_admin">Superadmin</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            {currentUser?.role === "staff_admin" && user.role === "client" && (
+                              <SuperadminDeleteButton
+                                itemId={user.company_id}
+                                itemType="client"
+                                onDelete={() => loadUsers()}
+                              />
+                            )}
+                          </div>
+                        </TableCell>
+                      </TableRow>,
+                      ...(isExpanded ? [
+                        <TableRow key={`${user.id}-details`}>
+                          <TableCell colSpan={7} className="p-0">
+                            {renderUserDetails(user)}
                           </TableCell>
                         </TableRow>
-                        {isExpanded && (
-                          <TableRow>
-                            <TableCell colSpan={7} className="p-0">
-                              {renderUserDetails(user)}
-                            </TableCell>
-                          </TableRow>
-                        )}
-                      </>
-                    );
+                      ] : [])
+                    ];
                   })
                 )}
               </TableBody>
