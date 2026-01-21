@@ -471,8 +471,8 @@ export default function AdminOrderDetailPage() {
         <div className="flex items-center gap-3">
           <StatusBadge status={order.status} />
           
-          {/* Save Basket button - available for draft and submitted orders */}
-          {["draft", "submitted"].includes(order.status) && (
+          {/* Save Basket button - available for draft, submitted, and confirmed orders (for late minute changes) */}
+          {["draft", "submitted", "confirmed"].includes(order.status) && (
             <Button onClick={saveBasket} variant="outline" className="bg-blue-50 hover:bg-blue-100 border-blue-300">
               <Save className="h-4 w-4 mr-2" />
               Save Basket
