@@ -35,6 +35,8 @@ export default function WarehousePage() {
     setLoading(true);
     try {
       // Get supplier orders (deliveries from suppliers)
+      // Include both "ordered" and "partially_received" statuses
+      // This ensures archived orders (dispatched) still show in warehouse if items aren't fully received
       const { data: supplierOrders } = await supabase
         .from("supplier_orders")
         .select(`
@@ -52,7 +54,7 @@ export default function WarehousePage() {
             )
           )
         `)
-        .eq("status", "ordered")
+        .in("status", ["ordered", "partially_received"])
         .order("order_date", { ascending: false });
 
       if (supplierOrders) {
@@ -76,14 +78,15 @@ export default function WarehousePage() {
               return;
             }
             
-            // Skip items from orders that are already dispatched, delivered, or cancelled
+            // Skip items from orders that are cancelled
             const orderStatus = item.order_item.order?.status;
-            if (orderStatus && ['dispatched', 'delivered', 'cancelled'].includes(orderStatus)) {
+            if (orderStatus === 'cancelled') {
               return;
             }
             
             // Skip items that have already been received in warehouse
             // This ensures each item only appears once in deliveries, even if re-ordered
+            // This is the key check - show items until warehouse process is complete
             if (item.order_item.received_in_warehouse === true) {
               return;
             }
