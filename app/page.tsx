@@ -102,7 +102,7 @@ export default async function DashboardPage() {
   );
 
   // Load active tours for the tours section
-  const { data: tours } = await supabase
+  const { data: toursData } = await supabase
     .from('tours')
     .select('*')
     .eq('is_active', true)
@@ -110,6 +110,26 @@ export default async function DashboardPage() {
     .gte('start_date', new Date().toISOString().split('T')[0]) // Only future tours
     .order('start_date', { ascending: true })
     .limit(3); // Show max 3 tours on dashboard
+
+  // Calculate available spaces for each tour
+  const tours = await Promise.all(
+    (toursData || []).map(async (tour) => {
+      const { data: bookings } = await supabase
+        .from('tour_bookings')
+        .select('booking_type')
+        .eq('tour_id', tour.id)
+        .eq('status', 'confirmed');
+
+      const bookedSpaces = bookings?.reduce((total, booking) => {
+        return total + (booking.booking_type === 'single' ? 1 : 2);
+      }, 0) || 0;
+
+      return {
+        ...tour,
+        available_spaces: tour.max_spaces - bookedSpaces
+      };
+    })
+  );
 
   // Load user's tour bookings
   const { data: myTours } = await supabase
