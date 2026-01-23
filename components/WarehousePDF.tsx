@@ -6,7 +6,7 @@ const styles = StyleSheet.create({
   page: {
     padding: 40,
     fontSize: 10,
-    fontFamily: 'Times-Roman',
+    fontFamily: 'Helvetica',
     backgroundColor: '#ffffff',
   },
   header: {
