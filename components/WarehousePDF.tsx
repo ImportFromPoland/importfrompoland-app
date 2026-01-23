@@ -1,12 +1,32 @@
 import React from 'react';
-import { Document, Page, Text, View, StyleSheet } from '@react-pdf/renderer';
+import { Document, Page, Text, View, StyleSheet, Font } from '@react-pdf/renderer';
+
+// Register Roboto font with full Unicode support for Polish characters
+// Roboto supports all Polish characters (ą, ć, ę, ł, ń, ó, ś, ź, ż)
+try {
+  Font.register({
+    family: 'Roboto',
+    fonts: [
+      {
+        src: 'https://fonts.gstatic.com/s/roboto/v30/KFOmCnqEu92Fr1Mu4mxP.ttf',
+      },
+      {
+        src: 'https://fonts.gstatic.com/s/roboto/v30/KFOlCnqEu92Fr1MmWUlfBBc4.ttf',
+        fontWeight: 'bold',
+      },
+    ],
+  });
+} catch (error) {
+  // Font already registered or registration failed - use fallback
+  console.warn('Font registration failed, using fallback:', error);
+}
 
 // PDF Styles
 const styles = StyleSheet.create({
   page: {
     padding: 40,
     fontSize: 10,
-    fontFamily: 'Helvetica',
+    fontFamily: 'Roboto',
     backgroundColor: '#ffffff',
   },
   header: {
