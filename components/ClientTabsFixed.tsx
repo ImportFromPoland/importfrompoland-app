@@ -375,9 +375,15 @@ function ClientTabsFixed({ baskets, orders, tours, myTours = [], userRole }: Cli
                         <MapPin className="h-4 w-4" />
                         {tour.departure_airport} → {tour.arrival_airport}
                       </div>
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <div className="flex items-center gap-2 text-sm">
                         <Calendar className="h-4 w-4" />
-                        {tour.available_spaces} spaces available
+                        {tour.available_spaces === 0 ? (
+                          <span className="text-red-600 font-semibold">Fully booked</span>
+                        ) : (
+                          <span className="text-muted-foreground">
+                            {tour.available_spaces} of {tour.max_spaces} spaces available
+                          </span>
+                        )}
                       </div>
                       <div className="flex items-center justify-between">
                         <div className="text-lg font-semibold">
