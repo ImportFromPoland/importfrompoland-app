@@ -2,24 +2,22 @@ import React from 'react';
 import { Document, Page, Text, View, StyleSheet, Font } from '@react-pdf/renderer';
 
 // Register Roboto font with full Unicode support for Polish characters
-// Roboto supports all Polish characters (ą, ć, ę, ł, ń, ó, ś, ź, ż)
-try {
-  Font.register({
-    family: 'Roboto',
-    fonts: [
-      {
-        src: 'https://fonts.gstatic.com/s/roboto/v30/KFOmCnqEu92Fr1Mu4mxP.ttf',
-      },
-      {
-        src: 'https://fonts.gstatic.com/s/roboto/v30/KFOlCnqEu92Fr1MmWUlfBBc4.ttf',
-        fontWeight: 'bold',
-      },
-    ],
-  });
-} catch (error) {
-  // Font already registered or registration failed - use fallback
-  console.warn('Font registration failed, using fallback:', error);
-}
+// Using CDN that supports CORS and has proper Unicode support
+Font.register({
+  family: 'Roboto',
+  fonts: [
+    {
+      src: 'https://cdnjs.cloudflare.com/ajax/libs/ink/3.1.10/fonts/Roboto/roboto-light-webfont.ttf',
+    },
+    {
+      src: 'https://cdnjs.cloudflare.com/ajax/libs/ink/3.1.10/fonts/Roboto/roboto-bold-webfont.ttf',
+      fontWeight: 'bold',
+    },
+  ],
+});
+
+// Alternative: Use system fonts that support Unicode
+// If Roboto fails, Helvetica should work as it has Unicode support in react-pdf
 
 // PDF Styles
 const styles = StyleSheet.create({
