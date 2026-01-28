@@ -12,7 +12,7 @@ import { PDFLink } from "@/components/PDFLink";
 import { Logo } from "@/components/Logo";
 import { formatDate, formatCurrency } from "@/lib/utils";
 import { TotalsPanel } from "@/components/TotalsPanel";
-import { Send, Edit2, Check, X, FileText } from "lucide-react";
+import { Send, Edit2, Check, X, FileText, RotateCcw } from "lucide-react";
 
 export default function OrderDetailPage() {
   const router = useRouter();
