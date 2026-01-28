@@ -21,7 +21,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { ArrowLeft, Save, Trash2, Plus, Edit2, Check, X, FileText, Download, CheckCircle } from "lucide-react";
+import { ArrowLeft, Save, Trash2, Plus, Edit2, Check, X, FileText, Download, CheckCircle, RotateCcw } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
@@ -301,6 +301,29 @@ export default function AdminOrderDetailPage() {
     }
   };
 
+  const revertToBasket = async () => {
+    if (!confirm("Are you sure you want to revert this order back to basket? The client will be able to edit it again.")) {
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from("orders")
+        .update({
+          status: "draft",
+          submitted_at: null,
+        })
+        .eq("id", order.id);
+
+      if (error) throw error;
+
+      alert("Order has been reverted to basket successfully!");
+      await loadData();
+    } catch (error: any) {
+      alert("Error reverting order: " + error.message);
+    }
+  };
+
   const toggleItemOrdered = async (itemId: string, currentValue: boolean) => {
     try {
       const { error } = await supabase
@@ -481,10 +504,16 @@ export default function AdminOrderDetailPage() {
           
           {/* Action Buttons based on status */}
           {order.status === "submitted" && (
-            <Button onClick={confirmOrder} className="bg-green-600 hover:bg-green-700">
-              <CheckCircle className="h-4 w-4 mr-2" />
-              Confirm Order
-            </Button>
+            <>
+              <Button onClick={revertToBasket} variant="outline" className="text-blue-600 hover:text-blue-700 hover:bg-blue-50">
+                <RotateCcw className="h-4 w-4 mr-2" />
+                Revert to Basket
+              </Button>
+              <Button onClick={confirmOrder} className="bg-green-600 hover:bg-green-700">
+                <CheckCircle className="h-4 w-4 mr-2" />
+                Confirm Order
+              </Button>
+            </>
           )}
           
           {["confirmed", "partially_received", "ready_to_ship"].includes(order.status) && (
