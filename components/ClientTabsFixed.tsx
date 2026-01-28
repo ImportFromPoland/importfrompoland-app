@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Package, MapPin, ShoppingCart, Calendar, Trash2 } from "lucide-react";
+import { Plus, Package, MapPin, ShoppingCart, Calendar, Trash2, RotateCcw } from "lucide-react";
 import { formatDate, formatCurrency } from "@/lib/utils";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import SettingsForm from "@/components/SettingsForm";
@@ -27,6 +27,7 @@ function ClientTabsFixed({ baskets, orders, tours, myTours = [], userRole }: Cli
   
   const [activeTab, setActiveTab] = useState("orders");
   const [deletingBasket, setDeletingBasket] = useState<string | null>(null);
+  const [revertingOrder, setRevertingOrder] = useState<string | null>(null);
 
   useEffect(() => {
     const tab = searchParams.get("tab");
@@ -40,6 +41,34 @@ function ClientTabsFixed({ baskets, orders, tours, myTours = [], userRole }: Cli
     const params = new URLSearchParams(searchParams);
     params.set("tab", value);
     router.push(`?${params.toString()}`, { scroll: false });
+  };
+
+  const revertToBasket = async (orderId: string) => {
+    if (!confirm("Are you sure you want to revert this order back to basket? You will be able to edit it again.")) {
+      return;
+    }
+
+    setRevertingOrder(orderId);
+    try {
+      const supabase = createClient();
+      
+      const { error } = await supabase
+        .from("orders")
+        .update({
+          status: "draft",
+          submitted_at: null,
+        })
+        .eq("id", orderId);
+
+      if (error) throw error;
+
+      // Refresh the page to update the orders list
+      router.refresh();
+    } catch (error: any) {
+      alert("Error reverting order: " + error.message);
+    } finally {
+      setRevertingOrder(null);
+    }
   };
 
   const deleteBasket = async (basketId: string) => {
@@ -250,36 +279,57 @@ function ClientTabsFixed({ baskets, orders, tours, myTours = [], userRole }: Cli
           {orders.length > 0 ? (
             <div className="grid gap-4">
               {orders.map((order) => (
-                <Link key={order.id} href={`/orders/${order.id}`}>
-                  <Card className="hover:shadow-md transition-shadow cursor-pointer">
-                    <CardHeader>
-                      <div className="flex items-start justify-between">
-                        <div>
-                          <CardTitle className="text-lg">{order.number}</CardTitle>
-                          <CardDescription>
-                            {order.client_notes && (
-                              <span className="font-medium text-foreground">{order.client_notes} • </span>
-                            )}
-                            Submitted {formatDate(order.created_at)}
-                          </CardDescription>
-                        </div>
+                <Card key={order.id} className="hover:shadow-md transition-shadow">
+                  <CardHeader>
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <Link href={`/orders/${order.id}`}>
+                          <CardTitle className="text-lg cursor-pointer hover:text-blue-600">
+                            {order.number}
+                          </CardTitle>
+                        </Link>
+                        <CardDescription>
+                          {order.client_notes && (
+                            <span className="font-medium text-foreground">{order.client_notes} • </span>
+                          )}
+                          Submitted {formatDate(order.created_at)}
+                        </CardDescription>
+                      </div>
+                      <div className="flex items-center gap-2">
                         <StatusBadge status={order.status} />
+                        {order.status === "submitted" && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              revertToBasket(order.id);
+                            }}
+                            disabled={revertingOrder === order.id}
+                            className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                            title="Revert to basket"
+                          >
+                            <RotateCcw className="h-4 w-4 mr-1" />
+                            {revertingOrder === order.id ? "Reverting..." : "Revert to Basket"}
+                          </Button>
+                        )}
                       </div>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="flex items-center justify-between">
-                        <div className="text-sm text-muted-foreground">
-                          {order.items?.length || 0} items
-                        </div>
-                        <div className="text-right">
-                          <div className="text-lg font-semibold">
-                            {order.totals?.grand_total ? formatCurrency(order.totals.grand_total) : 'Calculating...'}
-                          </div>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="flex items-center justify-between">
+                      <div className="text-sm text-muted-foreground">
+                        {order.items?.length || 0} items
+                      </div>
+                      <div className="text-right">
+                        <div className="text-lg font-semibold">
+                          {order.totals?.grand_total ? formatCurrency(order.totals.grand_total) : 'Calculating...'}
                         </div>
                       </div>
-                    </CardContent>
-                  </Card>
-                </Link>
+                    </div>
+                  </CardContent>
+                </Card>
               ))}
             </div>
           ) : (

@@ -27,6 +27,7 @@ export default function OrderDetailPage() {
   const [editingName, setEditingName] = useState(false);
   const [basketName, setBasketName] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [reverting, setReverting] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -137,6 +138,37 @@ export default function OrderDetailPage() {
       alert("Error submitting order: " + error.message);
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const revertToBasket = async () => {
+    if (!order) return;
+    
+    if (!confirm("Are you sure you want to revert this order back to basket? You will be able to edit it again.")) {
+      return;
+    }
+
+    setReverting(true);
+    try {
+      const { error } = await supabase
+        .from("orders")
+        .update({
+          status: "draft",
+          submitted_at: null,
+        })
+        .eq("id", order.id);
+
+      if (error) throw error;
+
+      alert("Order has been reverted to basket. You can now edit it.");
+      
+      // Reload data to reflect the change
+      loadData();
+      router.refresh();
+    } catch (error: any) {
+      alert("Error reverting order: " + error.message);
+    } finally {
+      setReverting(false);
     }
   };
 
@@ -253,6 +285,18 @@ export default function OrderDetailPage() {
             </div>
             <div className="flex items-center gap-3">
               <StatusBadge status={order.status} />
+              {order.status === 'submitted' && (
+                <Button 
+                  size="sm" 
+                  variant="outline" 
+                  onClick={revertToBasket}
+                  disabled={reverting}
+                  className="text-blue-600 hover:text-blue-700"
+                >
+                  <RotateCcw className="h-4 w-4 mr-2" />
+                  {reverting ? "Reverting..." : "Revert to Basket"}
+                </Button>
+              )}
               {order.status !== 'draft' && order.status !== 'submitted' && (
                 <Button size="sm" variant="outline" onClick={downloadPDF}>
                   <FileText className="h-4 w-4 mr-2" />
