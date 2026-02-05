@@ -400,6 +400,7 @@ export default function EditOrderPage() {
                             onRemove={() => removeLine(actualIndex)}
                             orderCurrency={currency}
                             vatRate={vatRate}
+                            hideUpload={true}
                           />
                         );
                       })}
@@ -414,17 +415,16 @@ export default function EditOrderPage() {
                     <div className="overflow-x-auto">
                       <table className="w-full">
                         <thead>
-                          <tr className="border-b">
-                            <th className="text-left p-2">#</th>
-                            <th className="text-left p-2">Product Name</th>
-                            <th className="text-left p-2">Website URL</th>
-                            <th className="text-left p-2">Supplier Name</th>
-                            <th className="text-right p-2">Unit Price (PLN)</th>
-                            <th className="text-right p-2">Unit Price (EUR)</th>
-                            <th className="text-right p-2">Quantity</th>
-                            <th className="text-left p-2">Unit of Measure</th>
-                            <th className="text-right p-2">Total (EUR)</th>
-                            <th className="text-center p-2">Actions</th>
+                          <tr className="border-b bg-gray-50">
+                            <th className="text-left p-2 font-semibold">No</th>
+                            <th className="text-left p-2 font-semibold">Item name</th>
+                            <th className="text-left p-2 font-semibold">Item link</th>
+                            <th className="text-right p-2 font-semibold">Price PLN</th>
+                            <th className="text-right p-2 font-semibold">Qty</th>
+                            <th className="text-right p-2 font-semibold">Price €</th>
+                            <th className="text-right p-2 font-semibold">Total €</th>
+                            <th className="text-left p-2 font-semibold">Notes</th>
+                            <th className="text-center p-2 font-semibold">Actions</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -436,13 +436,13 @@ export default function EditOrderPage() {
                             
                             return (
                               <tr key={line.line_number} className="border-b hover:bg-gray-50">
-                                <td className="p-2">{line.line_number}</td>
+                                <td className="p-2 font-medium">{line.line_number}</td>
                                 <td className="p-2">
                                   <Input
                                     value={line.product_name}
                                     onChange={(e) => updateLine(index, { ...line, product_name: e.target.value })}
                                     placeholder="Enter product name"
-                                    className="w-full"
+                                    className="w-full border-0 focus:ring-0"
                                   />
                                 </td>
                                 <td className="p-2">
@@ -451,17 +451,10 @@ export default function EditOrderPage() {
                                     value={line.website_url}
                                     onChange={(e) => updateLine(index, { ...line, website_url: e.target.value })}
                                     placeholder="https://..."
-                                    className="w-full"
+                                    className="w-full border-0 focus:ring-0"
                                   />
                                 </td>
-                                <td className="p-2">
-                                  <SupplierCombobox
-                                    value={line.supplier_name}
-                                    onChange={(value) => updateLine(index, { ...line, supplier_name: value, original_supplier_name: value })}
-                                    placeholder="Select or type supplier"
-                                  />
-                                </td>
-                                <td className="p-2">
+                                <td className="p-2 text-right">
                                   <Input
                                     type="number"
                                     step="0.01"
@@ -473,46 +466,38 @@ export default function EditOrderPage() {
                                       updateLine(index, { ...line, unit_price: parseFloat(cleanValue) || 0 });
                                     }}
                                     placeholder="0.00"
-                                    className="w-full text-right"
+                                    className="w-full text-right border-0 focus:ring-0"
                                   />
                                 </td>
                                 <td className="p-2 text-right">
+                                  <Input
+                                    type="number"
+                                    step="1"
+                                    min="1"
+                                    value={line.quantity}
+                                    onChange={(e) => updateLine(index, { ...line, quantity: parseFloat(e.target.value) || 1 })}
+                                    className="w-full text-right border-0 focus:ring-0"
+                                  />
+                                </td>
+                                <td className="p-2 text-right font-medium">
                                   {line.unit_price > 0 ? (
-                                    <span className="text-sm font-medium">
+                                    <span className="text-sm">
                                       {formatCurrency(unitPriceEUR, "EUR")}
                                     </span>
                                   ) : (
                                     <span className="text-sm text-muted-foreground">-</span>
                                   )}
                                 </td>
+                                <td className="p-2 text-right font-semibold">
+                                  {lineTotalEUR > 0 ? formatCurrency(lineTotalEUR, "EUR") : "-"}
+                                </td>
                                 <td className="p-2">
                                   <Input
-                                    type="number"
-                                    step={line.unit_of_measure === "m2" ? "0.01" : "1"}
-                                    min={line.unit_of_measure === "m2" ? "0.01" : "1"}
-                                    value={line.quantity}
-                                    onChange={(e) => updateLine(index, { ...line, quantity: parseFloat(e.target.value) || 1 })}
-                                    className="w-full text-right"
+                                    value={line.notes}
+                                    onChange={(e) => updateLine(index, { ...line, notes: e.target.value })}
+                                    placeholder="Optional notes"
+                                    className="w-full border-0 focus:ring-0"
                                   />
-                                </td>
-                                <td className="p-2">
-                                  <Select
-                                    value={line.unit_of_measure || "unit"}
-                                    onValueChange={(value: "unit" | "m2") =>
-                                      updateLine(index, { ...line, unit_of_measure: value })
-                                    }
-                                  >
-                                    <SelectTrigger className="w-full">
-                                      <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      <SelectItem value="unit">Unit (pcs)</SelectItem>
-                                      <SelectItem value="m2">m²</SelectItem>
-                                    </SelectContent>
-                                  </Select>
-                                </td>
-                                <td className="p-2 text-right font-medium">
-                                  {lineTotalEUR > 0 ? formatCurrency(lineTotalEUR, "EUR") : "-"}
                                 </td>
                                 <td className="p-2 text-center">
                                   <Button

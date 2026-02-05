@@ -34,9 +34,10 @@ interface OrderLineFormProps {
   onRemove: () => void;
   orderCurrency: "EUR" | "PLN";
   vatRate?: number;
+  hideUpload?: boolean;
 }
 
-export function OrderLineForm({ line, onUpdate, onRemove, orderCurrency, vatRate = 23 }: OrderLineFormProps) {
+export function OrderLineForm({ line, onUpdate, onRemove, orderCurrency, vatRate = 23, hideUpload = false }: OrderLineFormProps) {
   // Currency is always PLN for client input
   // No need to show conversion details to client
 
@@ -172,16 +173,20 @@ export function OrderLineForm({ line, onUpdate, onRemove, orderCurrency, vatRate
         </p>
       </div>
 
-      {line.attachment_url && (
-        <div className="text-sm text-green-600">
-          ✓ File attached: {line.attachment_url}
-        </div>
-      )}
+      {!hideUpload && (
+        <>
+          {line.attachment_url && (
+            <div className="text-sm text-green-600">
+              ✓ File attached: {line.attachment_url}
+            </div>
+          )}
 
-      <FileUploader
-        bucket="attachments"
-        onUploadComplete={(url) => onUpdate({ ...line, attachment_url: url })}
-      />
+          <FileUploader
+            bucket="attachments"
+            onUploadComplete={(url) => onUpdate({ ...line, attachment_url: url })}
+          />
+        </>
+      )}
     </div>
   );
 }
