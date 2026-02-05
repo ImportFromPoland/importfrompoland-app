@@ -9,8 +9,12 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { OrderLineForm, type OrderLineData } from "@/components/OrderLineForm";
 import { TotalsPanel } from "@/components/TotalsPanel";
-import { Plus, Save, Send } from "lucide-react";
+import { SupplierCombobox } from "@/components/SupplierCombobox";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import { Plus, Save, Send, Table2, LayoutGrid, Trash2 } from "lucide-react";
 import { PLN_TO_EUR_RATE, DEFAULT_VAT_RATE } from "@/lib/constants";
+import { formatCurrency } from "@/lib/utils";
 import { Logo } from "@/components/Logo";
 
 export default function NewOrderPage() {
@@ -42,6 +46,7 @@ export default function NewOrderPage() {
       notes: "",
     },
   ]);
+  const [viewMode, setViewMode] = useState<"classic" | "table">("classic");
 
   useEffect(() => {
     async function loadUser() {
@@ -324,38 +329,192 @@ export default function NewOrderPage() {
           <div className="lg:col-span-2 space-y-6">
             <Card>
               <CardHeader>
-                <CardTitle>Order Items</CardTitle>
+                <div className="flex items-center justify-between">
+                  <CardTitle>Order Items</CardTitle>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setViewMode(viewMode === "table" ? "classic" : "table")}
+                  >
+                    {viewMode === "classic" ? (
+                      <>
+                        <Table2 className="h-4 w-4 mr-2" />
+                        Switch to Table View
+                      </>
+                    ) : (
+                      <>
+                        <LayoutGrid className="h-4 w-4 mr-2" />
+                        Switch to Classic View
+                      </>
+                    )}
+                  </Button>
+                </div>
               </CardHeader>
-              <CardContent className="space-y-4">
-                {lines.map((line, index) => (
-                  <OrderLineForm
-                    key={index}
-                    line={line}
-                    onUpdate={(updated) => updateLine(index, updated)}
-                    onRemove={() => removeLine(index)}
-                    orderCurrency={currency}
-                    vatRate={vatRate}
-                  />
-                ))}
+              <CardContent>
+                {viewMode === "classic" ? (
+                  <div className="space-y-4">
+                    {lines.map((line, index) => (
+                      <OrderLineForm
+                        key={index}
+                        line={line}
+                        onUpdate={(updated) => updateLine(index, updated)}
+                        onRemove={() => removeLine(index)}
+                        orderCurrency={currency}
+                        vatRate={vatRate}
+                      />
+                    ))}
 
-                <Button variant="outline" onClick={addLine} className="w-full">
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add Line Item
-                </Button>
+                    <Button variant="outline" onClick={addLine} className="w-full">
+                      <Plus className="h-4 w-4 mr-2" />
+                      Add Line Item
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="overflow-x-auto">
+                      <table className="w-full">
+                        <thead>
+                          <tr className="border-b bg-gray-50">
+                            <th className="text-left p-2 font-semibold text-sm">No</th>
+                            <th className="text-left p-2 font-semibold text-sm">Product name</th>
+                            <th className="text-left p-2 font-semibold text-sm">Website URL</th>
+                            <th className="text-left p-2 font-semibold text-sm">Supplier</th>
+                            <th className="text-right p-2 font-semibold text-sm">Unit price (PLN)</th>
+                            <th className="text-right p-2 font-semibold text-sm">Quantity</th>
+                            <th className="text-left p-2 font-semibold text-sm">Unit of measure</th>
+                            <th className="text-left p-2 font-semibold text-sm">Notes</th>
+                            <th className="text-right p-2 font-semibold text-sm">Line total (€)</th>
+                            <th className="text-center p-2 font-semibold text-sm w-12"></th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {lines.map((line, index) => {
+                            // Calculate line total: PLN price * quantity / 3.1 (includes VAT + delivery)
+                            const unitPriceEUR = line.unit_price > 0 
+                              ? line.unit_price * PLN_TO_EUR_RATE 
+                              : 0;
+                            const lineTotalEUR = unitPriceEUR * line.quantity;
+                            
+                            return (
+                              <tr key={line.line_number || index} className="border-b hover:bg-gray-50/50 transition-colors">
+                                <td className="p-2 font-medium text-sm">{line.line_number}</td>
+                                <td className="p-2">
+                                  <Input
+                                    value={line.product_name}
+                                    onChange={(e) => updateLine(index, { ...line, product_name: e.target.value })}
+                                    placeholder="Enter product name"
+                                    className="w-full border-0 bg-transparent focus:ring-1 focus:ring-blue-500 rounded px-2 py-1"
+                                  />
+                                </td>
+                                <td className="p-2">
+                                  <Input
+                                    type="url"
+                                    value={line.website_url}
+                                    onChange={(e) => updateLine(index, { ...line, website_url: e.target.value })}
+                                    placeholder="https://..."
+                                    className="w-full border-0 bg-transparent focus:ring-1 focus:ring-blue-500 rounded px-2 py-1 text-sm"
+                                  />
+                                </td>
+                                <td className="p-2">
+                                  <SupplierCombobox
+                                    value={line.supplier_name}
+                                    onChange={(value) => updateLine(index, { ...line, supplier_name: value, original_supplier_name: value })}
+                                    placeholder="Select supplier"
+                                  />
+                                </td>
+                                <td className="p-2">
+                                  <Input
+                                    type="number"
+                                    step="0.01"
+                                    min="0.01"
+                                    value={line.unit_price || ''}
+                                    onChange={(e) => {
+                                      const value = e.target.value;
+                                      const cleanValue = value.replace(/^0+/, '') || '0';
+                                      updateLine(index, { ...line, unit_price: parseFloat(cleanValue) || 0 });
+                                    }}
+                                    placeholder="0.00"
+                                    className="w-full text-right border-0 bg-transparent focus:ring-1 focus:ring-blue-500 rounded px-2 py-1"
+                                  />
+                                </td>
+                                <td className="p-2">
+                                  <Input
+                                    type="number"
+                                    step={line.unit_of_measure === "m2" ? "0.01" : "1"}
+                                    min={line.unit_of_measure === "m2" ? "0.01" : "1"}
+                                    value={line.quantity}
+                                    onChange={(e) => updateLine(index, { ...line, quantity: parseFloat(e.target.value) || 1 })}
+                                    className="w-full text-right border-0 bg-transparent focus:ring-1 focus:ring-blue-500 rounded px-2 py-1"
+                                  />
+                                </td>
+                                <td className="p-2">
+                                  <Select
+                                    value={line.unit_of_measure || "unit"}
+                                    onValueChange={(value: "unit" | "m2") =>
+                                      updateLine(index, { ...line, unit_of_measure: value })
+                                    }
+                                  >
+                                    <SelectTrigger className="w-full h-8 border-0 bg-transparent focus:ring-1 focus:ring-blue-500">
+                                      <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="unit">pcs</SelectItem>
+                                      <SelectItem value="m2">m²</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                </td>
+                                <td className="p-2">
+                                  <Input
+                                    value={line.notes}
+                                    onChange={(e) => updateLine(index, { ...line, notes: e.target.value })}
+                                    placeholder="Optional notes"
+                                    className="w-full border-0 bg-transparent focus:ring-1 focus:ring-blue-500 rounded px-2 py-1 text-sm"
+                                  />
+                                </td>
+                                <td className="p-2 text-right font-semibold text-sm">
+                                  {lineTotalEUR > 0 ? formatCurrency(lineTotalEUR, "EUR") : "-"}
+                                </td>
+                                <td className="p-2 text-center">
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => {
+                                      if (confirm("Remove this line?")) {
+                                        removeLine(index);
+                                      }
+                                    }}
+                                    className="h-8 w-8 p-0 hover:bg-red-50"
+                                  >
+                                    <Trash2 className="h-4 w-4 text-red-600" />
+                                  </Button>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                    <Button variant="outline" onClick={addLine} className="w-full">
+                      <Plus className="h-4 w-4 mr-2" />
+                      Add another item
+                    </Button>
+                  </div>
+                )}
               </CardContent>
             </Card>
 
             <Card>
               <CardHeader>
-                <CardTitle>Notes</CardTitle>
+                <CardTitle>Client Notes</CardTitle>
               </CardHeader>
               <CardContent>
-                <Label htmlFor="client_notes">Client Notes</Label>
-                <Input
+                <Label htmlFor="client_notes" className="sr-only">Client Notes</Label>
+                <Textarea
                   id="client_notes"
                   value={clientNotes}
                   onChange={(e) => setClientNotes(e.target.value)}
                   placeholder="Any additional notes..."
+                  className="min-h-[100px]"
                 />
               </CardContent>
             </Card>
