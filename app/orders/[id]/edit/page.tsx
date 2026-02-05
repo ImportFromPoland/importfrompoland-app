@@ -400,7 +400,6 @@ export default function EditOrderPage() {
                             onRemove={() => removeLine(actualIndex)}
                             orderCurrency={currency}
                             vatRate={vatRate}
-                            hideUpload={true}
                           />
                         );
                       })}

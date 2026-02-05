@@ -5,7 +5,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { FileUploader } from "@/components/FileUploader";
 import { SupplierCombobox } from "@/components/SupplierCombobox";
 import { Trash2 } from "lucide-react";
 import { PLN_TO_EUR_RATE, EUR_TO_PLN_DIVISOR } from "@/lib/constants";
@@ -37,7 +36,7 @@ interface OrderLineFormProps {
   hideUpload?: boolean;
 }
 
-export function OrderLineForm({ line, onUpdate, onRemove, orderCurrency, vatRate = 23, hideUpload = false }: OrderLineFormProps) {
+export function OrderLineForm({ line, onUpdate, onRemove, orderCurrency, vatRate = 23 }: OrderLineFormProps) {
   // Currency is always PLN for client input
   // No need to show conversion details to client
 
@@ -173,20 +172,6 @@ export function OrderLineForm({ line, onUpdate, onRemove, orderCurrency, vatRate
         </p>
       </div>
 
-      {!hideUpload && (
-        <>
-          {line.attachment_url && (
-            <div className="text-sm text-green-600">
-              ✓ File attached: {line.attachment_url}
-            </div>
-          )}
-
-          <FileUploader
-            bucket="attachments"
-            onUploadComplete={(url) => onUpdate({ ...line, attachment_url: url })}
-          />
-        </>
-      )}
     </div>
   );
 }
