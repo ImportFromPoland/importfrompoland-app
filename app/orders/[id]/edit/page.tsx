@@ -143,7 +143,15 @@ export default function EditOrderPage() {
 
   const addLine = () => {
     // Find the highest line number and add 1
-    const maxLineNumber = lines.length > 0 ? Math.max(...lines.map(line => line.line_number)) : 0;
+    const maxLineNumber = lines.length > 0 ? Math.max(...lines.map(line => line.line_number || 0)) : 0;
+    
+    // Find first empty line or add new one
+    const emptyLineIndex = lines.findIndex(line => !line.product_name && line.unit_price === 0);
+    
+    if (emptyLineIndex >= 0 && viewMode === "table") {
+      // In table view, just focus on the empty line
+      return;
+    }
     
     setLines([
       ...lines,
