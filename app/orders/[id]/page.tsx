@@ -65,6 +65,13 @@ export default function OrderDetailPage() {
         return;
       }
 
+      // Sort items by line_number ascending (chronological order)
+      if (orderData.items && orderData.items.length > 0) {
+        orderData.items.sort((a: any, b: any) => 
+          (a.line_number || 0) - (b.line_number || 0)
+        );
+      }
+
       setOrder(orderData);
       setBasketName(orderData.client_notes || "");
 
