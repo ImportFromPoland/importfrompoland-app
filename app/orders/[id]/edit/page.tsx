@@ -145,29 +145,29 @@ export default function EditOrderPage() {
     // Find the highest line number and add 1
     const maxLineNumber = lines.length > 0 ? Math.max(...lines.map(line => line.line_number || 0)) : 0;
     
-    // Find first empty line or add new one
-    const emptyLineIndex = lines.findIndex(line => !line.product_name && line.unit_price === 0);
+    const newLine: OrderLineData = {
+      line_number: maxLineNumber + 1,
+      product_name: "",
+      website_url: "",
+      supplier_name: "",
+      unit_price: 0,
+      quantity: 1,
+      currency: "PLN",
+      unit_of_measure: "unit",
+      discount_percent: 0,
+      notes: "",
+    };
     
-    if (emptyLineIndex >= 0 && viewMode === "table") {
-      // In table view, just focus on the empty line
-      return;
-    }
+    setLines([...lines, newLine]);
     
-    setLines([
-      ...lines,
-      {
-        line_number: maxLineNumber + 1,
-        product_name: "",
-        website_url: "",
-        supplier_name: "",
-        unit_price: 0,
-        quantity: 1,
-        currency: "PLN",
-        unit_of_measure: "unit",
-        discount_percent: 0,
-        notes: "",
-      },
-    ]);
+    // Auto-focus on Product name input in the new row after render
+    setTimeout(() => {
+      const newRowIndex = lines.length;
+      const productInput = document.querySelector(`input[data-line-index="${newRowIndex}"][data-field="product_name"]`) as HTMLInputElement;
+      if (productInput) {
+        productInput.focus();
+      }
+    }, 0);
   };
 
   const removeLine = (index: number) => {
@@ -360,220 +360,222 @@ export default function EditOrderPage() {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2 space-y-6">
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle>Order Items</CardTitle>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setViewMode(viewMode === "table" ? "classic" : "table")}
-                  >
-                    {viewMode === "classic" ? (
-                      <>
-                        <Table2 className="h-4 w-4 mr-2" />
-                        Switch to Table View
-                      </>
-                    ) : (
-                      <>
-                        <LayoutGrid className="h-4 w-4 mr-2" />
-                        Switch to Classic View
-                      </>
-                    )}
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent>
-                {viewMode === "classic" ? (
-                  <div className="space-y-4">
-                    {lines
-                      .filter((line) => line.product_name || line.unit_price > 0)
-                      .map((line, index) => {
-                        const actualIndex = lines.findIndex((l) => l.line_number === line.line_number);
-                        return (
-                          <OrderLineForm
-                            key={line.line_number}
-                            line={line}
-                            onUpdate={(updated) => updateLine(actualIndex, updated)}
-                            onRemove={() => removeLine(actualIndex)}
-                            orderCurrency={currency}
-                            vatRate={vatRate}
-                          />
-                        );
-                      })}
+        <div className="space-y-6">
+          {/* Invoice-style Order Table */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Order Items</CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b bg-gray-50">
+                      <th className="text-left p-3 font-semibold text-sm">No</th>
+                      <th className="text-left p-3 font-semibold text-sm">Product name</th>
+                      <th className="text-left p-3 font-semibold text-sm">Website URL</th>
+                      <th className="text-left p-3 font-semibold text-sm">Supplier</th>
+                      <th className="text-right p-3 font-semibold text-sm">Unit price (PLN)</th>
+                      <th className="text-right p-3 font-semibold text-sm">Quantity</th>
+                      <th className="text-left p-3 font-semibold text-sm">Unit of measure</th>
+                      <th className="text-left p-3 font-semibold text-sm">Notes</th>
+                      <th className="text-right p-3 font-semibold text-sm">Line total (€)</th>
+                      <th className="text-center p-3 font-semibold text-sm w-12"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {lines.map((line, index) => {
+                      // Calculate line total: PLN price * quantity / 3.1 (includes VAT + delivery)
+                      const unitPriceEUR = line.unit_price > 0 
+                        ? line.unit_price * PLN_TO_EUR_RATE 
+                        : 0;
+                      const lineTotalEUR = unitPriceEUR * line.quantity;
+                      
+                      return (
+                        <tr key={line.line_number || index} className="border-b hover:bg-gray-50/50 transition-colors">
+                          <td className="p-3 font-medium text-sm">{line.line_number}</td>
+                          <td className="p-3">
+                            <Input
+                              data-line-index={index}
+                              data-field="product_name"
+                              value={line.product_name}
+                              onChange={(e) => updateLine(index, { ...line, product_name: e.target.value })}
+                              placeholder="Enter product name"
+                              className="w-full border-0 bg-transparent focus:ring-1 focus:ring-blue-500 rounded px-2 py-1"
+                            />
+                          </td>
+                          <td className="p-3">
+                            <Input
+                              data-line-index={index}
+                              data-field="website_url"
+                              type="url"
+                              value={line.website_url}
+                              onChange={(e) => updateLine(index, { ...line, website_url: e.target.value })}
+                              placeholder="https://..."
+                              className="w-full border-0 bg-transparent focus:ring-1 focus:ring-blue-500 rounded px-2 py-1 text-sm"
+                            />
+                          </td>
+                          <td className="p-3">
+                            <SupplierCombobox
+                              value={line.supplier_name}
+                              onChange={(value) => updateLine(index, { ...line, supplier_name: value, original_supplier_name: value })}
+                              placeholder="Select supplier"
+                            />
+                          </td>
+                          <td className="p-3">
+                            <Input
+                              data-line-index={index}
+                              data-field="unit_price"
+                              type="number"
+                              step="0.01"
+                              min="0.01"
+                              value={line.unit_price || ''}
+                              onChange={(e) => {
+                                const value = e.target.value;
+                                const cleanValue = value.replace(/^0+/, '') || '0';
+                                updateLine(index, { ...line, unit_price: parseFloat(cleanValue) || 0 });
+                              }}
+                              placeholder="0.00"
+                              className="w-full text-right border-0 bg-transparent focus:ring-1 focus:ring-blue-500 rounded px-2 py-1"
+                            />
+                          </td>
+                          <td className="p-3">
+                            <Input
+                              data-line-index={index}
+                              data-field="quantity"
+                              type="number"
+                              step={line.unit_of_measure === "m2" ? "0.01" : "1"}
+                              min={line.unit_of_measure === "m2" ? "0.01" : "1"}
+                              value={line.quantity}
+                              onChange={(e) => updateLine(index, { ...line, quantity: parseFloat(e.target.value) || 1 })}
+                              className="w-full text-right border-0 bg-transparent focus:ring-1 focus:ring-blue-500 rounded px-2 py-1"
+                            />
+                          </td>
+                          <td className="p-3">
+                            <Select
+                              value={line.unit_of_measure || "unit"}
+                              onValueChange={(value: "unit" | "m2") =>
+                                updateLine(index, { ...line, unit_of_measure: value })
+                              }
+                            >
+                              <SelectTrigger className="w-full h-8 border-0 bg-transparent focus:ring-1 focus:ring-blue-500">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="unit">pcs</SelectItem>
+                                <SelectItem value="m2">m²</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </td>
+                          <td className="p-3">
+                            <Input
+                              data-line-index={index}
+                              data-field="notes"
+                              value={line.notes}
+                              onChange={(e) => updateLine(index, { ...line, notes: e.target.value })}
+                              placeholder="Optional notes"
+                              className="w-full border-0 bg-transparent focus:ring-1 focus:ring-blue-500 rounded px-2 py-1 text-sm"
+                            />
+                          </td>
+                          <td className="p-3 text-right font-semibold text-sm">
+                            {lineTotalEUR > 0 ? formatCurrency(lineTotalEUR, "EUR") : "-"}
+                          </td>
+                          <td className="p-3 text-center">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                if (confirm("Remove this line?")) {
+                                  removeLine(index);
+                                }
+                              }}
+                              className="h-8 w-8 p-0 hover:bg-red-50"
+                            >
+                              <Trash2 className="h-4 w-4 text-red-600" />
+                            </Button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                  {/* Invoice-style Totals Footer */}
+                  <tfoot>
+                    <tr>
+                      <td colSpan={7} className="p-4"></td>
+                      <td colSpan={2} className="p-4 border-t-2 border-gray-300">
+                        <div className="flex flex-col items-end space-y-2">
+                          <div className="flex justify-between w-full text-sm">
+                            <span className="text-muted-foreground">Subtotal (excl. VAT):</span>
+                            <span className="font-medium">{formatCurrency(totals.itemsNet, currency)}</span>
+                          </div>
+                          <div className="flex justify-between w-full text-sm">
+                            <span className="text-muted-foreground">VAT ({vatRate}%):</span>
+                            <span className="font-medium">{formatCurrency(totals.vatAmount, currency)}</span>
+                          </div>
+                          {shippingCost > 0 && (
+                            <div className="flex justify-between w-full text-sm">
+                              <span className="text-muted-foreground">Shipping:</span>
+                              <span className="font-medium">{formatCurrency(shippingCost, currency)}</span>
+                            </div>
+                          )}
+                          <div className="flex justify-between w-full pt-2 border-t border-gray-300">
+                            <span className="font-semibold text-base">Grand Total:</span>
+                            <span className="font-bold text-lg text-primary">{formatCurrency(totals.grandTotal, currency)}</span>
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+              
+              {/* Add Item Button */}
+              <div className="p-4 border-t">
+                <Button
+                  variant="outline"
+                  onClick={addLine}
+                  className="w-full"
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add another item
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
 
-                    <Button variant="outline" onClick={addLine} className="w-full">
-                      <Plus className="h-4 w-4 mr-2" />
-                      Add Line Item
-                    </Button>
-                  </div>
-                ) : (
-                  <div className="relative">
-                    <div className="overflow-x-auto">
-                      <table className="w-full">
-                        <thead>
-                          <tr className="border-b bg-gray-50">
-                            <th className="text-left p-2 font-semibold">No</th>
-                            <th className="text-left p-2 font-semibold">Item name</th>
-                            <th className="text-left p-2 font-semibold">Item link</th>
-                            <th className="text-right p-2 font-semibold">Price PLN</th>
-                            <th className="text-right p-2 font-semibold">Qty</th>
-                            <th className="text-right p-2 font-semibold">Price €</th>
-                            <th className="text-right p-2 font-semibold">Total €</th>
-                            <th className="text-left p-2 font-semibold">Notes</th>
-                            <th className="text-center p-2 font-semibold">Actions</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {lines.slice(0, 10).map((line, index) => {
-                            const unitPriceEUR = line.unit_price > 0 
-                              ? line.unit_price * PLN_TO_EUR_RATE 
-                              : 0;
-                            const lineTotalEUR = unitPriceEUR * line.quantity;
-                            
-                            return (
-                              <tr key={line.line_number} className="border-b hover:bg-gray-50">
-                                <td className="p-2 font-medium">{line.line_number}</td>
-                                <td className="p-2">
-                                  <Input
-                                    value={line.product_name}
-                                    onChange={(e) => updateLine(index, { ...line, product_name: e.target.value })}
-                                    placeholder="Enter product name"
-                                    className="w-full border-0 focus:ring-0"
-                                  />
-                                </td>
-                                <td className="p-2">
-                                  <Input
-                                    type="url"
-                                    value={line.website_url}
-                                    onChange={(e) => updateLine(index, { ...line, website_url: e.target.value })}
-                                    placeholder="https://..."
-                                    className="w-full border-0 focus:ring-0"
-                                  />
-                                </td>
-                                <td className="p-2 text-right">
-                                  <Input
-                                    type="number"
-                                    step="0.01"
-                                    min="0.01"
-                                    value={line.unit_price || ''}
-                                    onChange={(e) => {
-                                      const value = e.target.value;
-                                      const cleanValue = value.replace(/^0+/, '') || '0';
-                                      updateLine(index, { ...line, unit_price: parseFloat(cleanValue) || 0 });
-                                    }}
-                                    placeholder="0.00"
-                                    className="w-full text-right border-0 focus:ring-0"
-                                  />
-                                </td>
-                                <td className="p-2 text-right">
-                                  <Input
-                                    type="number"
-                                    step="1"
-                                    min="1"
-                                    value={line.quantity}
-                                    onChange={(e) => updateLine(index, { ...line, quantity: parseFloat(e.target.value) || 1 })}
-                                    className="w-full text-right border-0 focus:ring-0"
-                                  />
-                                </td>
-                                <td className="p-2 text-right font-medium">
-                                  {line.unit_price > 0 ? (
-                                    <span className="text-sm">
-                                      {formatCurrency(unitPriceEUR, "EUR")}
-                                    </span>
-                                  ) : (
-                                    <span className="text-sm text-muted-foreground">-</span>
-                                  )}
-                                </td>
-                                <td className="p-2 text-right font-semibold">
-                                  {lineTotalEUR > 0 ? formatCurrency(lineTotalEUR, "EUR") : "-"}
-                                </td>
-                                <td className="p-2">
-                                  <Input
-                                    value={line.notes}
-                                    onChange={(e) => updateLine(index, { ...line, notes: e.target.value })}
-                                    placeholder="Optional notes"
-                                    className="w-full border-0 focus:ring-0"
-                                  />
-                                </td>
-                                <td className="p-2 text-center">
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => {
-                                      if (confirm("Are you sure you want to remove this line?")) {
-                                        removeLine(index);
-                                      }
-                                    }}
-                                  >
-                                    <Trash2 className="h-4 w-4 text-red-600" />
-                                  </Button>
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-                    <div className="mt-4 flex justify-start">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={addLine}
-                        className="flex items-center gap-2"
-                      >
-                        <Plus className="h-4 w-4" />
-                        Add New Line
-                      </Button>
-                    </div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+          {/* Order-level Notes */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Client Notes</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Label htmlFor="client_notes" className="sr-only">Additional Notes</Label>
+              <Textarea
+                id="client_notes"
+                value={clientNotes}
+                onChange={(e) => setClientNotes(e.target.value)}
+                placeholder="Any additional information about this order..."
+                className="min-h-[100px]"
+              />
+            </CardContent>
+          </Card>
 
-            <Card>
-              <CardHeader>
-                <CardTitle>Notes</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <Label htmlFor="client_notes">Additional Notes</Label>
-                <Input
-                  id="client_notes"
-                  value={clientNotes}
-                  onChange={(e) => setClientNotes(e.target.value)}
-                  placeholder="Any additional information..."
-                />
-              </CardContent>
-            </Card>
-          </div>
-
-          <div className="space-y-6">
-            <TotalsPanel
-              itemsNet={totals.itemsNet}
-              vatRate={vatRate}
-              vatAmount={totals.vatAmount}
-              itemsGross={totals.itemsGross}
-              shippingCost={shippingCost}
-              headerDiscountPercent={headerDiscountPercent}
-              headerMarkupPercent={headerMarkupPercent}
-              grandTotal={totals.grandTotal}
-              currency={currency}
-              clientView={true}
-            />
-
-            <div className="space-y-2">
-              <Button
-                onClick={saveChanges}
-                variant="outline"
-                className="w-full"
-                disabled={saving}
-              >
-                <Save className="h-4 w-4 mr-2" />
-                Save Changes
-              </Button>
-            </div>
+          {/* Action Buttons */}
+          <div className="flex justify-end gap-3">
+            <Button
+              variant="outline"
+              onClick={() => router.push(`/orders/${order.id}`)}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={saveChanges}
+              disabled={saving}
+              className="min-w-[140px]"
+            >
+              <Save className="h-4 w-4 mr-2" />
+              {saving ? "Saving..." : "Save Draft"}
+            </Button>
           </div>
         </div>
       </main>
