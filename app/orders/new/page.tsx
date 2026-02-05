@@ -325,8 +325,8 @@ export default function NewOrderPage() {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2 space-y-6">
+        <div className={`space-y-6 ${viewMode === "table" ? "" : "grid grid-cols-1 lg:grid-cols-3 gap-6"}`}>
+          <div className={viewMode === "table" ? "space-y-6" : "lg:col-span-2 space-y-6"}>
             <Card>
               <CardHeader>
                 <div className="flex items-center justify-between">
