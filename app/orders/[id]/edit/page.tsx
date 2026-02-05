@@ -7,12 +7,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { OrderLineForm, type OrderLineData } from "@/components/OrderLineForm";
-import { TotalsPanel } from "@/components/TotalsPanel";
+import { type OrderLineData } from "@/components/OrderLineForm";
 import { Logo } from "@/components/Logo";
 import { SupplierCombobox } from "@/components/SupplierCombobox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Save, Send, Table2, LayoutGrid, Trash2 } from "lucide-react";
+import { Plus, Save, Trash2 } from "lucide-react";
 import { PLN_TO_EUR_RATE, DEFAULT_VAT_RATE, EUR_TO_PLN_DIVISOR } from "@/lib/constants";
 import { formatCurrency } from "@/lib/utils";
 
