@@ -266,7 +266,7 @@ export default function AdminOrderDetailPage() {
           order_id: order.id,
           line_number: newLineNumber,
           product_name: "New Item",
-          unit_price: 0,
+          unit_price: 0.01, // Must be > 0 due to positive_price constraint
           quantity: 1,
           currency: "PLN",
           unit_of_measure: "unit",
