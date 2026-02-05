@@ -70,7 +70,11 @@ export default function AdminOrderDetailPage() {
       }
 
       setOrder(orderData);
-      setItems(orderData.items || []);
+      // Sort items by line_number ascending (chronological order)
+      const sortedItems = (orderData.items || []).sort((a: any, b: any) => 
+        (a.line_number || 0) - (b.line_number || 0)
+      );
+      setItems(sortedItems);
 
       // Get order totals
       const { data: totalsData } = await supabase
