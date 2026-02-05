@@ -46,7 +46,7 @@ export default function NewOrderPage() {
       notes: "",
     },
   ]);
-  const [viewMode, setViewMode] = useState<"classic" | "table">("classic");
+  const [viewMode, setViewMode] = useState<"classic" | "table">("table");
 
   useEffect(() => {
     async function loadUser() {
