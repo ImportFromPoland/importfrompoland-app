@@ -12,7 +12,7 @@ import { PDFLink } from "@/components/PDFLink";
 import { Logo } from "@/components/Logo";
 import { formatDate, formatCurrency } from "@/lib/utils";
 import { TotalsPanel } from "@/components/TotalsPanel";
-import { Send, Edit2, Check, X, FileText, RotateCcw, Table2, LayoutGrid } from "lucide-react";
+import { Send, Edit2, Check, X, FileText, RotateCcw } from "lucide-react";
 
 export default function OrderDetailPage() {
   const router = useRouter();
@@ -28,7 +28,6 @@ export default function OrderDetailPage() {
   const [basketName, setBasketName] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [reverting, setReverting] = useState(false);
-  const [viewMode, setViewMode] = useState<"table" | "classic">("table");
 
   useEffect(() => {
     loadData();
@@ -328,29 +327,10 @@ export default function OrderDetailPage() {
           <div className="lg:col-span-2 space-y-6">
             <Card>
               <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle>Order Items</CardTitle>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setViewMode(viewMode === "table" ? "classic" : "table")}
-                  >
-                    {viewMode === "table" ? (
-                      <>
-                        <LayoutGrid className="h-4 w-4 mr-2" />
-                        Switch to Classic View
-                      </>
-                    ) : (
-                      <>
-                        <Table2 className="h-4 w-4 mr-2" />
-                        Switch to Table View
-                      </>
-                    )}
-                  </Button>
-                </div>
+                <CardTitle>Order Items</CardTitle>
               </CardHeader>
               <CardContent>
-                {viewMode === "table" ? (
+                <div className="overflow-x-auto">
                   <div className="overflow-x-auto">
                     <table className="w-full">
                       <thead>
@@ -405,63 +385,9 @@ export default function OrderDetailPage() {
                             </tr>
                           );
                         })}
-                      </tbody>
-                    </table>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    {order.items.map((item: any) => {
-                      // Convert PLN to EUR (client entered gross PLN)
-                      const unitPriceEUR = item.currency === 'PLN' 
-                        ? item.unit_price / 3.1 
-                        : item.unit_price;
-                      const lineTotalEUR = unitPriceEUR * item.quantity;
-                      
-                      return (
-                        <div key={item.id} className="border rounded-lg p-4 space-y-2">
-                          <div className="flex items-start justify-between">
-                            <div className="flex-1">
-                              <div className="flex items-center gap-2 mb-1">
-                                <span className="text-sm font-medium text-muted-foreground">#{item.line_number}</span>
-                                <h3 className="font-semibold text-lg">{item.product_name}</h3>
-                              </div>
-                              {(item.original_supplier_name || item.supplier_name) && (
-                                <p className="text-sm text-muted-foreground mb-1">
-                                  Supplier: {item.original_supplier_name || item.supplier_name}
-                                </p>
-                              )}
-                              {item.website_url && (
-                                <a
-                                  href={item.website_url}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="text-sm text-blue-600 hover:underline"
-                                >
-                                  View Product →
-                                </a>
-                              )}
-                              {item.notes && (
-                                <p className="text-sm text-muted-foreground mt-2 italic">
-                                  {item.notes}
-                                </p>
-                              )}
-                            </div>
-                            <div className="text-right ml-4">
-                              <p className="text-sm text-muted-foreground">Unit Price</p>
-                              <p className="font-semibold">{formatCurrency(unitPriceEUR, 'EUR')}</p>
-                              <p className="text-sm text-muted-foreground mt-2">Quantity</p>
-                              <p className="font-semibold">
-                                {item.quantity} {item.unit_of_measure === 'm2' ? 'm²' : 'pcs'}
-                              </p>
-                              <p className="text-sm text-muted-foreground mt-2">Line Total</p>
-                              <p className="font-bold text-lg">{formatCurrency(lineTotalEUR, 'EUR')}</p>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
+                    </tbody>
+                  </table>
+                </div>
               </CardContent>
             </Card>
 

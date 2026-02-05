@@ -10,8 +10,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { OrderLineForm, type OrderLineData } from "@/components/OrderLineForm";
 import { TotalsPanel } from "@/components/TotalsPanel";
 import { Logo } from "@/components/Logo";
-import { Plus, Save, Send } from "lucide-react";
-import { PLN_TO_EUR_RATE, DEFAULT_VAT_RATE } from "@/lib/constants";
+import { SupplierCombobox } from "@/components/SupplierCombobox";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Plus, Save, Send, Table2, LayoutGrid, Trash2 } from "lucide-react";
+import { PLN_TO_EUR_RATE, DEFAULT_VAT_RATE, EUR_TO_PLN_DIVISOR } from "@/lib/constants";
+import { formatCurrency } from "@/lib/utils";
 
 export default function EditOrderPage() {
   const router = useRouter();
@@ -30,6 +33,7 @@ export default function EditOrderPage() {
   const [clientNotes, setClientNotes] = useState("");
 
   const [lines, setLines] = useState<OrderLineData[]>([]);
+  const [viewMode, setViewMode] = useState<"classic" | "table">("classic");
 
   useEffect(() => {
     loadOrder();
@@ -74,36 +78,60 @@ export default function EditOrderPage() {
 
       // Load items
       if (orderData.items && orderData.items.length > 0) {
-        const loadedLines = orderData.items.map((item: any) => ({
-          id: item.id,
-          line_number: item.line_number,
-          product_name: item.product_name,
-          website_url: item.website_url || "",
-          supplier_name: item.supplier_name || "",
-          unit_price: item.unit_price,
-          quantity: item.quantity,
-          currency: item.currency,
-          unit_of_measure: item.unit_of_measure || "unit",
-          discount_percent: item.discount_percent || 0,
-          notes: item.notes || "",
-          attachment_url: item.attachment_url || "",
-          original_net_price: item.original_net_price,
-        }));
-        setLines(loadedLines);
+        const loadedLines = orderData.items
+          .map((item: any) => ({
+            id: item.id,
+            line_number: item.line_number,
+            product_name: item.product_name,
+            website_url: item.website_url || "",
+            supplier_name: item.supplier_name || "",
+            unit_price: item.unit_price,
+            quantity: item.quantity,
+            currency: item.currency,
+            unit_of_measure: item.unit_of_measure || "unit",
+            discount_percent: item.discount_percent || 0,
+            notes: item.notes || "",
+            attachment_url: item.attachment_url || "",
+            original_net_price: item.original_net_price,
+          }))
+          .sort((a: any, b: any) => (a.line_number || 0) - (b.line_number || 0));
+        
+        // Ensure we have at least 10 lines for table view
+        const maxLineNumber = Math.max(...loadedLines.map((l: any) => l.line_number), 0);
+        const emptyLines: OrderLineData[] = [];
+        for (let i = loadedLines.length; i < 10; i++) {
+          emptyLines.push({
+            line_number: maxLineNumber + i + 1,
+            product_name: "",
+            website_url: "",
+            supplier_name: "",
+            unit_price: 0,
+            quantity: 1,
+            currency: "PLN",
+            unit_of_measure: "unit",
+            discount_percent: 0,
+            notes: "",
+          });
+        }
+        setLines([...loadedLines, ...emptyLines]);
       } else {
-        // No items, add empty line
-        setLines([{
-          line_number: 1,
-          product_name: "",
-          website_url: "",
-          supplier_name: "",
-          unit_price: 0,
-          quantity: 1,
-          currency: "PLN",
-          unit_of_measure: "unit",
-          discount_percent: 0,
-          notes: "",
-        }]);
+        // No items, add 10 empty lines for table view
+        const emptyLines: OrderLineData[] = [];
+        for (let i = 0; i < 10; i++) {
+          emptyLines.push({
+            line_number: i + 1,
+            product_name: "",
+            website_url: "",
+            supplier_name: "",
+            unit_price: 0,
+            quantity: 1,
+            currency: "PLN",
+            unit_of_measure: "unit",
+            discount_percent: 0,
+            notes: "",
+          });
+        }
+        setLines(emptyLines);
       }
     } catch (error: any) {
       console.error("Error loading order:", error);
@@ -328,24 +356,188 @@ export default function EditOrderPage() {
           <div className="lg:col-span-2 space-y-6">
             <Card>
               <CardHeader>
-                <CardTitle>Order Items</CardTitle>
+                <div className="flex items-center justify-between">
+                  <CardTitle>Order Items</CardTitle>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setViewMode(viewMode === "table" ? "classic" : "table")}
+                  >
+                    {viewMode === "classic" ? (
+                      <>
+                        <Table2 className="h-4 w-4 mr-2" />
+                        Switch to Table View
+                      </>
+                    ) : (
+                      <>
+                        <LayoutGrid className="h-4 w-4 mr-2" />
+                        Switch to Classic View
+                      </>
+                    )}
+                  </Button>
+                </div>
               </CardHeader>
-              <CardContent className="space-y-4">
-                {lines.map((line, index) => (
-                  <OrderLineForm
-                    key={index}
-                    line={line}
-                    onUpdate={(updated) => updateLine(index, updated)}
-                    onRemove={() => removeLine(index)}
-                    orderCurrency={currency}
-                    vatRate={vatRate}
-                  />
-                ))}
+              <CardContent>
+                {viewMode === "classic" ? (
+                  <div className="space-y-4">
+                    {lines
+                      .filter((line) => line.product_name || line.unit_price > 0)
+                      .map((line, index) => {
+                        const actualIndex = lines.findIndex((l) => l.line_number === line.line_number);
+                        return (
+                          <OrderLineForm
+                            key={line.line_number}
+                            line={line}
+                            onUpdate={(updated) => updateLine(actualIndex, updated)}
+                            onRemove={() => removeLine(actualIndex)}
+                            orderCurrency={currency}
+                            vatRate={vatRate}
+                          />
+                        );
+                      })}
 
-                <Button variant="outline" onClick={addLine} className="w-full">
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add Line Item
-                </Button>
+                    <Button variant="outline" onClick={addLine} className="w-full">
+                      <Plus className="h-4 w-4 mr-2" />
+                      Add Line Item
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="relative">
+                    <div className="overflow-x-auto">
+                      <table className="w-full">
+                        <thead>
+                          <tr className="border-b">
+                            <th className="text-left p-2">#</th>
+                            <th className="text-left p-2">Product Name</th>
+                            <th className="text-left p-2">Website URL</th>
+                            <th className="text-left p-2">Supplier Name</th>
+                            <th className="text-right p-2">Unit Price (PLN)</th>
+                            <th className="text-right p-2">Unit Price (EUR)</th>
+                            <th className="text-right p-2">Quantity</th>
+                            <th className="text-left p-2">Unit of Measure</th>
+                            <th className="text-right p-2">Total (EUR)</th>
+                            <th className="text-center p-2">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {lines.slice(0, 10).map((line, index) => {
+                            const unitPriceEUR = line.unit_price > 0 
+                              ? line.unit_price * PLN_TO_EUR_RATE 
+                              : 0;
+                            const lineTotalEUR = unitPriceEUR * line.quantity;
+                            
+                            return (
+                              <tr key={line.line_number} className="border-b hover:bg-gray-50">
+                                <td className="p-2">{line.line_number}</td>
+                                <td className="p-2">
+                                  <Input
+                                    value={line.product_name}
+                                    onChange={(e) => updateLine(index, { ...line, product_name: e.target.value })}
+                                    placeholder="Enter product name"
+                                    className="w-full"
+                                  />
+                                </td>
+                                <td className="p-2">
+                                  <Input
+                                    type="url"
+                                    value={line.website_url}
+                                    onChange={(e) => updateLine(index, { ...line, website_url: e.target.value })}
+                                    placeholder="https://..."
+                                    className="w-full"
+                                  />
+                                </td>
+                                <td className="p-2">
+                                  <SupplierCombobox
+                                    value={line.supplier_name}
+                                    onChange={(value) => updateLine(index, { ...line, supplier_name: value, original_supplier_name: value })}
+                                    placeholder="Select or type supplier"
+                                  />
+                                </td>
+                                <td className="p-2">
+                                  <Input
+                                    type="number"
+                                    step="0.01"
+                                    min="0.01"
+                                    value={line.unit_price || ''}
+                                    onChange={(e) => {
+                                      const value = e.target.value;
+                                      const cleanValue = value.replace(/^0+/, '') || '0';
+                                      updateLine(index, { ...line, unit_price: parseFloat(cleanValue) || 0 });
+                                    }}
+                                    placeholder="0.00"
+                                    className="w-full text-right"
+                                  />
+                                </td>
+                                <td className="p-2 text-right">
+                                  {line.unit_price > 0 ? (
+                                    <span className="text-sm font-medium">
+                                      {formatCurrency(unitPriceEUR, "EUR")}
+                                    </span>
+                                  ) : (
+                                    <span className="text-sm text-muted-foreground">-</span>
+                                  )}
+                                </td>
+                                <td className="p-2">
+                                  <Input
+                                    type="number"
+                                    step={line.unit_of_measure === "m2" ? "0.01" : "1"}
+                                    min={line.unit_of_measure === "m2" ? "0.01" : "1"}
+                                    value={line.quantity}
+                                    onChange={(e) => updateLine(index, { ...line, quantity: parseFloat(e.target.value) || 1 })}
+                                    className="w-full text-right"
+                                  />
+                                </td>
+                                <td className="p-2">
+                                  <Select
+                                    value={line.unit_of_measure || "unit"}
+                                    onValueChange={(value: "unit" | "m2") =>
+                                      updateLine(index, { ...line, unit_of_measure: value })
+                                    }
+                                  >
+                                    <SelectTrigger className="w-full">
+                                      <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="unit">Unit (pcs)</SelectItem>
+                                      <SelectItem value="m2">m²</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                </td>
+                                <td className="p-2 text-right font-medium">
+                                  {lineTotalEUR > 0 ? formatCurrency(lineTotalEUR, "EUR") : "-"}
+                                </td>
+                                <td className="p-2 text-center">
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => {
+                                      if (confirm("Are you sure you want to remove this line?")) {
+                                        removeLine(index);
+                                      }
+                                    }}
+                                  >
+                                    <Trash2 className="h-4 w-4 text-red-600" />
+                                  </Button>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                    <div className="mt-4 flex justify-start">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={addLine}
+                        className="flex items-center gap-2"
+                      >
+                        <Plus className="h-4 w-4" />
+                        Add New Line
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
 
