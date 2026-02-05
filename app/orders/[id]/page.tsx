@@ -331,8 +331,7 @@ export default function OrderDetailPage() {
               </CardHeader>
               <CardContent>
                 <div className="overflow-x-auto">
-                  <div className="overflow-x-auto">
-                    <table className="w-full">
+                  <table className="w-full">
                       <thead>
                         <tr className="border-b">
                           <th className="text-left p-2">#</th>
