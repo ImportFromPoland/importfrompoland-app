@@ -503,51 +503,100 @@ export default function NewOrderPage() {
               </CardContent>
             </Card>
 
-            <Card>
-              <CardHeader>
-                <CardTitle>Client Notes</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <Label htmlFor="client_notes" className="sr-only">Client Notes</Label>
-                <Textarea
-                  id="client_notes"
-                  value={clientNotes}
-                  onChange={(e) => setClientNotes(e.target.value)}
-                  placeholder="Any additional notes..."
-                  className="min-h-[100px]"
-                />
-              </CardContent>
-            </Card>
+            {viewMode === "table" ? (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Client Notes</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <Label htmlFor="client_notes" className="sr-only">Client Notes</Label>
+                    <Textarea
+                      id="client_notes"
+                      value={clientNotes}
+                      onChange={(e) => setClientNotes(e.target.value)}
+                      placeholder="Any additional notes..."
+                      className="min-h-[100px]"
+                    />
+                  </CardContent>
+                </Card>
+
+                <div className="space-y-6">
+                  <TotalsPanel
+                    itemsNet={totals.itemsNet}
+                    vatRate={vatRate}
+                    vatAmount={totals.vatAmount}
+                    itemsGross={totals.itemsGross}
+                    shippingCost={shippingCost}
+                    headerDiscountPercent={headerDiscountPercent}
+                    headerMarkupPercent={headerMarkupPercent}
+                    grandTotal={totals.grandTotal}
+                    currency={currency}
+                    clientView={true}
+                  />
+
+                  <Button
+                    onClick={saveDraft}
+                    variant="outline"
+                    className="w-full"
+                    disabled={loading}
+                  >
+                    <Save className="h-4 w-4 mr-2" />
+                    Save Draft
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <>
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Client Notes</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <Label htmlFor="client_notes" className="sr-only">Client Notes</Label>
+                    <Textarea
+                      id="client_notes"
+                      value={clientNotes}
+                      onChange={(e) => setClientNotes(e.target.value)}
+                      placeholder="Any additional notes..."
+                      className="min-h-[100px]"
+                    />
+                  </CardContent>
+                </Card>
+              </>
+            )}
           </div>
 
-          <div className="space-y-6">
-            {/* Order Settings hidden from clients - managed by admin */}
-            
-            <TotalsPanel
-              itemsNet={totals.itemsNet}
-              vatRate={vatRate}
-              vatAmount={totals.vatAmount}
-              itemsGross={totals.itemsGross}
-              shippingCost={shippingCost}
-              headerDiscountPercent={headerDiscountPercent}
-              headerMarkupPercent={headerMarkupPercent}
-              grandTotal={totals.grandTotal}
-              currency={currency}
-              clientView={true}
-            />
+          {viewMode === "classic" && (
+            <div className="space-y-6">
+              {/* Order Settings hidden from clients - managed by admin */}
+              
+              <TotalsPanel
+                itemsNet={totals.itemsNet}
+                vatRate={vatRate}
+                vatAmount={totals.vatAmount}
+                itemsGross={totals.itemsGross}
+                shippingCost={shippingCost}
+                headerDiscountPercent={headerDiscountPercent}
+                headerMarkupPercent={headerMarkupPercent}
+                grandTotal={totals.grandTotal}
+                currency={currency}
+                clientView={true}
+              />
 
-            <div className="space-y-2">
-              <Button
-                onClick={saveDraft}
-                variant="outline"
-                className="w-full"
-                disabled={loading}
-              >
-                <Save className="h-4 w-4 mr-2" />
-                Save Draft
-              </Button>
+              <div className="space-y-2">
+                <Button
+                  onClick={saveDraft}
+                  variant="outline"
+                  className="w-full"
+                  disabled={loading}
+                >
+                  <Save className="h-4 w-4 mr-2" />
+                  Save Draft
+                </Button>
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </main>
     </div>
