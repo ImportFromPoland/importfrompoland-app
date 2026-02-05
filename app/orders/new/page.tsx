@@ -324,7 +324,7 @@ export default function NewOrderPage() {
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className={`mx-auto px-4 sm:px-6 lg:px-8 py-8 ${viewMode === "table" ? "max-w-[95%] xl:max-w-[90%]" : "max-w-7xl"}`}>
         <div className={`space-y-6 ${viewMode === "table" ? "" : "grid grid-cols-1 lg:grid-cols-3 gap-6"}`}>
           <div className={viewMode === "table" ? "space-y-6" : "lg:col-span-2 space-y-6"}>
             <Card>
