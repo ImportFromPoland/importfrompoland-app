@@ -60,14 +60,20 @@ serve(async (req) => {
       throw new Error("Order not found");
     }
 
-    // Validate user owns this order
+    // Validate user owns this order OR is admin/staff_admin
     const { data: profile } = await supabaseClient
       .from("profiles")
       .select("company_id, role")
       .eq("id", user.id)
       .single();
 
-    if (!profile || profile.company_id !== order.company_id) {
+    if (!profile) {
+      throw new Error("User profile not found");
+    }
+
+    // Allow admins and staff_admins to submit any order, otherwise check ownership
+    const isAdmin = profile.role === "admin" || profile.role === "staff_admin";
+    if (!isAdmin && profile.company_id !== order.company_id) {
       throw new Error("Unauthorized to submit this order");
     }
 
