@@ -252,20 +252,35 @@ export default function NewOrderPage() {
       // Create order items
       const items = lines
         .filter((line) => line.product_name && line.unit_price > 0)
-        .map((line) => ({
-          order_id: order.id,
-          line_number: line.line_number,
-          product_name: line.product_name,
-          website_url: line.website_url,
-          supplier_name: line.supplier_name,
-          original_supplier_name: line.original_supplier_name || line.supplier_name,
-          unit_price: line.unit_price,
-          quantity: line.quantity,
-          currency: line.currency,
-          discount_percent: line.discount_percent,
-          notes: line.notes,
-          attachment_url: line.attachment_url,
-        }));
+        .map((line) => {
+          // Calculate original net price from gross price with default 23% VAT
+          let originalNetPrice = 0;
+          if (line.currency === "PLN" && currency === "EUR") {
+            const grossEUR = line.unit_price * PLN_TO_EUR_RATE;
+            originalNetPrice = grossEUR / 1.23; // Remove 23% VAT
+          } else if (line.currency === currency) {
+            originalNetPrice = line.unit_price / 1.23; // Remove 23% VAT
+          } else {
+            originalNetPrice = line.unit_price / 1.23; // Remove 23% VAT
+          }
+
+          return {
+            order_id: order.id,
+            line_number: line.line_number,
+            product_name: line.product_name,
+            website_url: line.website_url,
+            supplier_name: line.supplier_name,
+            original_supplier_name: line.original_supplier_name || line.supplier_name,
+            unit_price: line.unit_price,
+            quantity: line.quantity,
+            currency: line.currency,
+            unit_of_measure: line.unit_of_measure || "unit",
+            discount_percent: line.discount_percent,
+            notes: line.notes,
+            attachment_url: line.attachment_url,
+            original_net_price: originalNetPrice,
+          };
+        });
 
       if (items.length === 0) {
         throw new Error("Please add at least one item");
