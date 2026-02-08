@@ -21,7 +21,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { ArrowLeft, Save, Trash2, Plus, Edit2, Check, X, FileText, Download, CheckCircle, RotateCcw } from "lucide-react";
+import { ArrowLeft, Save, Trash2, Plus, Edit2, Check, X, FileText, Download, CheckCircle, RotateCcw, Send } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
@@ -328,6 +328,53 @@ export default function AdminOrderDetailPage() {
     }
   };
 
+  const submitOrderForClient = async () => {
+    if (!order) return;
+
+    if (!confirm(`Are you sure you want to submit this order on behalf of ${order.company?.name}? This will generate an order number and notify the client.`)) {
+      return;
+    }
+
+    try {
+      // Check if order has items
+      if (!items || items.length === 0) {
+        alert("Cannot submit an order with no items. Please add items first.");
+        return;
+      }
+
+      // Submit order via Edge Function (same as client does)
+      const { data: session } = await supabase.auth.getSession();
+      if (!session?.session?.access_token) {
+        throw new Error("Not authenticated");
+      }
+
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/submit-order`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${session.session.access_token}`,
+          },
+          body: JSON.stringify({ order_id: order.id }),
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: "Failed to submit order" }));
+        throw new Error(errorData.error || `Failed to submit order: ${response.statusText}`);
+      }
+
+      const result = await response.json();
+      
+      alert(`Order submitted successfully! Order number: ${result.order_number || 'Generated'}`);
+      await loadData();
+    } catch (error: any) {
+      alert("Error submitting order: " + error.message);
+      console.error("Submit order error:", error);
+    }
+  };
+
   const toggleItemOrdered = async (itemId: string, currentValue: boolean) => {
     try {
       const { error } = await supabase
@@ -507,6 +554,12 @@ export default function AdminOrderDetailPage() {
           )}
           
           {/* Action Buttons based on status */}
+          {order.status === "draft" && (
+            <Button onClick={submitOrderForClient} className="bg-blue-600 hover:bg-blue-700">
+              <Send className="h-4 w-4 mr-2" />
+              Submit Order for Client
+            </Button>
+          )}
           {order.status === "submitted" && (
             <>
               <Button onClick={revertToBasket} variant="outline" className="text-blue-600 hover:text-blue-700 hover:bg-blue-50">
