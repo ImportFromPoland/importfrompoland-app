@@ -343,35 +343,62 @@ export default function AdminOrderDetailPage() {
       }
 
       // Submit order via Edge Function (same as client does)
-      const { data: session } = await supabase.auth.getSession();
+      const { data: session, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError) {
+        throw new Error(`Session error: ${sessionError.message}`);
+      }
       if (!session?.session?.access_token) {
-        throw new Error("Not authenticated");
+        throw new Error("Not authenticated - no access token");
       }
 
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/submit-order`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${session.session.access_token}`,
-          },
-          body: JSON.stringify({ order_id: order.id }),
-        }
-      );
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+      if (!supabaseUrl) {
+        throw new Error("NEXT_PUBLIC_SUPABASE_URL is not configured");
+      }
+
+      const functionUrl = `${supabaseUrl}/functions/v1/submit-order`;
+      console.log("Submitting order to:", functionUrl);
+      console.log("Order ID:", order.id);
+
+      const response = await fetch(functionUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.session.access_token}`,
+        },
+        body: JSON.stringify({ order_id: order.id }),
+      });
+
+      console.log("Response status:", response.status);
+      console.log("Response ok:", response.ok);
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: "Failed to submit order" }));
-        throw new Error(errorData.error || `Failed to submit order: ${response.statusText}`);
+        let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.error || errorMessage;
+          console.error("Error response:", errorData);
+        } catch (e) {
+          const text = await response.text();
+          console.error("Error response text:", text);
+          errorMessage = text || errorMessage;
+        }
+        throw new Error(errorMessage);
       }
 
       const result = await response.json();
+      console.log("Success response:", result);
       
       alert(`Order submitted successfully! Order number: ${result.order_number || 'Generated'}`);
       await loadData();
     } catch (error: any) {
-      alert("Error submitting order: " + error.message);
-      console.error("Submit order error:", error);
+      const errorMessage = error.message || "Unknown error occurred";
+      console.error("Submit order error details:", {
+        message: errorMessage,
+        stack: error.stack,
+        orderId: order?.id,
+      });
+      alert(`Error submitting order: ${errorMessage}\n\nCheck browser console for details.`);
     }
   };
 
