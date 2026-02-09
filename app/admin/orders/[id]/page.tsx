@@ -103,7 +103,7 @@ export default function AdminOrderDetailPage() {
       setOrder({ ...order, [field]: value });
       
       // Reload totals if financial fields changed
-      if (["vat_rate", "shipping_cost", "discount_percent", "markup_percent"].includes(field)) {
+      if (["vat_rate", "shipping_cost", "discount_percent", "discount_amount", "discount_type", "markup_percent"].includes(field)) {
         await loadData();
       }
     } catch (error: any) {
@@ -224,9 +224,20 @@ export default function AdminOrderDetailPage() {
 
     // Apply header modifiers
     const headerDiscountPercent = order.discount_percent || 0;
+    const headerDiscountAmount = order.discount_amount || 0;
+    const headerDiscountType = order.discount_type || "percent";
     const headerMarkupPercent = order.markup_percent || 0;
+    
+    // Calculate discount amount based on type
+    let discountAmount = 0;
+    if (headerDiscountType === "amount") {
+      discountAmount = headerDiscountAmount;
+    } else {
+      discountAmount = itemsNet * (headerDiscountPercent / 100);
+    }
+    
     const itemsNetAfterHeader =
-      itemsNet * (1 - headerDiscountPercent / 100) * (1 + headerMarkupPercent / 100);
+      (itemsNet - discountAmount) * (1 + headerMarkupPercent / 100);
 
     const vatRate = order.vat_rate || 23;
     const vatAmount = (itemsNetAfterHeader * vatRate) / 100;
@@ -880,8 +891,20 @@ export default function AdminOrderDetailPage() {
                 <CardContent className="space-y-3">
                   <div className="flex justify-between text-sm">
                     <span>Subtotal (excl. VAT):</span>
-                    <span className="font-medium">{formatCurrency((displayTotals.items_net || 0), order.currency)}</span>
+                    <span className="font-medium">{formatCurrency((displayTotals.items_net_before_header || displayTotals.items_net || 0), order.currency)}</span>
                   </div>
+                  {(() => {
+                    const discountType = order.discount_type || "percent";
+                    const discountValue = discountType === "amount" 
+                      ? (order.discount_amount || 0)
+                      : ((displayTotals.items_net_before_header || displayTotals.items_net || 0) * (order.discount_percent || 0) / 100);
+                    return discountValue > 0 && (
+                      <div className="flex justify-between text-sm text-green-600">
+                        <span>Discount {discountType === "amount" ? "" : `(${order.discount_percent || 0}%)`}:</span>
+                        <span className="font-medium">-{formatCurrency(discountValue, order.currency)}</span>
+                      </div>
+                    );
+                  })()}
                   <div className="flex justify-between text-sm">
                     <span>VAT ({order.vat_rate}%):</span>
                     <span className="font-medium">{formatCurrency((displayTotals.vat_amount || 0), order.currency)}</span>
@@ -943,6 +966,70 @@ export default function AdminOrderDetailPage() {
                     updateOrderHeader("shipping_cost", parseFloat(e.target.value) || 0)
                   }
                 />
+              </div>
+
+              {/* Discount Section */}
+              <div className="space-y-2 border-t pt-4">
+                <Label>Discount</Label>
+                <div className="flex gap-2">
+                  <Select
+                    value={order.discount_type || "percent"}
+                    onValueChange={(value) => {
+                      setOrder({ ...order, discount_type: value });
+                      updateOrderHeader("discount_type", value);
+                      // Reset discount when switching types
+                      if (value === "percent") {
+                        setOrder({ ...order, discount_type: value, discount_amount: 0 });
+                        updateOrderHeader("discount_amount", 0);
+                      } else {
+                        setOrder({ ...order, discount_type: value, discount_percent: 0 });
+                        updateOrderHeader("discount_percent", 0);
+                      }
+                    }}
+                  >
+                    <SelectTrigger className="w-32">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="percent">%</SelectItem>
+                      <SelectItem value="amount">Amount</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  {order.discount_type === "percent" ? (
+                    <Input
+                      type="number"
+                      step="0.01"
+                      placeholder="0.00"
+                      value={order.discount_percent || 0}
+                      onChange={(e) =>
+                        setOrder({ ...order, discount_percent: parseFloat(e.target.value) || 0 })
+                      }
+                      onBlur={(e) =>
+                        updateOrderHeader("discount_percent", parseFloat(e.target.value) || 0)
+                      }
+                      className="flex-1"
+                    />
+                  ) : (
+                    <Input
+                      type="number"
+                      step="0.01"
+                      placeholder="0.00"
+                      value={order.discount_amount || 0}
+                      onChange={(e) =>
+                        setOrder({ ...order, discount_amount: parseFloat(e.target.value) || 0 })
+                      }
+                      onBlur={(e) =>
+                        updateOrderHeader("discount_amount", parseFloat(e.target.value) || 0)
+                      }
+                      className="flex-1"
+                    />
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {order.discount_type === "percent" 
+                    ? "Percentage discount applied to subtotal"
+                    : `Fixed amount discount in ${order.currency || "EUR"}`}
+                </p>
               </div>
 
               <div className="space-y-2">
