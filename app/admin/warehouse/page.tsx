@@ -140,9 +140,9 @@ export default function WarehousePage() {
           console.error("All orders query error:", allOrdersError);
         }
 
-        // Filter orders for packing
+        // Filter orders for packing (bez partially_dispatched/dispatched - te są w "wysłane")
         const orders = allOrders?.filter(o => 
-          ["confirmed", "paid", "partially_packed", "packed", "partially_dispatched", "dispatched"].includes(o.status)
+          ["confirmed", "paid", "partially_packed", "packed"].includes(o.status)
         ) || [];
 
         if (orders) {
@@ -173,19 +173,20 @@ export default function WarehousePage() {
           setPackingOrders(sortedOrders);
         }
 
-        // Load sent orders (dispatched status)
+        // Load sent orders (dispatched + partially_dispatched)
         const { data: sentOrdersData } = await supabase
           .from("orders")
           .select(`
             id,
             number,
+            status,
             company:companies(name),
             created_by_profile:profiles!created_by(full_name, email),
             dispatched_at,
             planned_delivery_date,
             updated_at
           `)
-          .eq("status", "dispatched")
+          .in("status", ["dispatched", "partially_dispatched"])
           .order("dispatched_at", { ascending: false });
 
         if (sentOrdersData) {
@@ -516,6 +517,28 @@ export default function WarehousePage() {
     }
   };
 
+  const markOrderPartiallyShipped = async (orderId: string) => {
+    try {
+      await supabase
+        .from("orders")
+        .update({ 
+          status: "partially_dispatched",
+          dispatched_at: new Date().toISOString()
+        })
+        .eq("id", orderId);
+
+      setPackingOrders(prevOrders => 
+        prevOrders.filter(order => order.id !== orderId)
+      );
+
+      await loadData();
+
+      alert("Zamówienie oznaczone jako częściowo wysłane!");
+    } catch (error: any) {
+      alert("Błąd: " + error.message);
+    }
+  };
+
   const updatePlannedDeliveryDate = async (orderId: string, date: string) => {
     try {
       const { error } = await supabase
@@ -780,10 +803,20 @@ export default function WarehousePage() {
                             </Button>
                           </div>
                         )}
-                        {someReceived && !allReceived && (
-                          <Button variant="outline" size="sm">
+                        {packedCount > 0 && !allPacked && (
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            onClick={() => markOrderPartiallyShipped(order.id)}
+                          >
+                            <Truck className="h-4 w-4 mr-1" />
+                            Częściowo wysłane
+                          </Button>
+                        )}
+                        {someReceived && !allReceived && packedCount === 0 && (
+                          <Button variant="outline" size="sm" disabled>
                             <Clock className="h-4 w-4 mr-1" />
-                            Częściowa
+                            Oczekuje na dostawy
                           </Button>
                         )}
                       </div>
@@ -881,7 +914,12 @@ export default function WarehousePage() {
                   <CardContent className="p-4">
                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                       <div className="flex-1">
-                        <h3 className="font-semibold text-lg">Zamówienie: {order.number}</h3>
+                        <div className="flex items-center gap-2">
+                          <h3 className="font-semibold text-lg">Zamówienie: {order.number}</h3>
+                          {order.status === "partially_dispatched" && (
+                            <Badge variant="secondary">Częściowo wysłane</Badge>
+                          )}
+                        </div>
                         <p className="text-sm text-muted-foreground">
                           Klient: {order.company.name}
                           {order.created_by_profile?.full_name && ` • ${order.created_by_profile.full_name}`}
