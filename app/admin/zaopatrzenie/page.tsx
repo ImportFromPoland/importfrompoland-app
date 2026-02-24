@@ -285,17 +285,82 @@ export default function ZaopatrzeniePage() {
         return;
       }
 
-      // Check if there are any items to order
       const itemsToOrder = orderItems.filter(item => item.ordered_from_supplier && item.supplier_name);
-      
       if (itemsToOrder.length === 0) {
         alert("Brak produktów do zamówienia. Zaznacz produkty i wpisz dostawców.");
         return;
       }
 
-      // Save partial order without changing status
+      const orderedItemIds = itemsToOrder.map(item => item.id);
+      const remainingItems = orderItems.filter(item => !orderedItemIds.includes(item.id));
+
+      if (remainingItems.length === 0) {
+        await saveOrderItems(itemsToOrder);
+        alert("Wszystkie produkty zamówione – użyj „Zapisz zamówienia u dostawców”.");
+        loadData();
+        return;
+      }
+
       await saveOrderItems(itemsToOrder);
-      alert("Częściowe zamówienie zapisane!");
+      const newOrderNumber = await getNextPartialOrderNumber(selectedOrder.number);
+
+      const { data: origOrder } = await supabase
+        .from("orders")
+        .select("company_id, created_by, status, currency, vat_rate, shipping_cost, discount_percent, markup_percent, paid_at, submitted_at, confirmed_at")
+        .eq("id", selectedOrder.id)
+        .single();
+
+      if (!origOrder) throw new Error("Nie znaleziono zamówienia");
+
+      const { data: newOrder, error: newOrderErr } = await supabase
+        .from("orders")
+        .insert([{
+          number: newOrderNumber,
+          company_id: origOrder.company_id,
+          created_by: origOrder.created_by,
+          status: origOrder.status,
+          currency: origOrder.currency,
+          vat_rate: origOrder.vat_rate ?? 23,
+          shipping_cost: 0,
+          discount_percent: origOrder.discount_percent ?? 0,
+          markup_percent: origOrder.markup_percent ?? 0,
+          paid_at: origOrder.paid_at,
+          submitted_at: origOrder.submitted_at,
+          confirmed_at: origOrder.confirmed_at,
+        }])
+        .select()
+        .single();
+
+      if (newOrderErr || !newOrder) throw newOrderErr || new Error("Błąd tworzenia zamówienia");
+
+      for (let i = 0; i < orderedItemIds.length; i++) {
+        await supabase
+          .from("order_items")
+          .update({ order_id: newOrder.id, line_number: i + 1 })
+          .eq("id", orderedItemIds[i]);
+      }
+
+      for (let i = 0; i < remainingItems.length; i++) {
+        await supabase
+          .from("order_items")
+          .update({ line_number: i + 1 })
+          .eq("id", remainingItems[i].id);
+      }
+
+      const { data: soiRows } = await supabase
+        .from("supplier_order_items")
+        .select("supplier_order_id")
+        .in("order_item_id", orderedItemIds);
+      const allSoIds = [...new Set((soiRows || []).map((r: { supplier_order_id: string }) => r.supplier_order_id))];
+      for (const soId of allSoIds) {
+        await supabase
+          .from("supplier_orders")
+          .update({ order_id: newOrder.id })
+          .eq("id", soId);
+      }
+
+      alert(`Zamówione pozycje przeniesione do ${newOrderNumber} (archiwum). Pozostałe w ${selectedOrder.number}.`);
+      setSelectedOrder(null);
       loadData();
     } catch (error) {
       console.error("Error saving partial order:", error);
@@ -303,8 +368,8 @@ export default function ZaopatrzeniePage() {
     }
   };
 
-  const saveOrderItems = async (itemsToOrder: any[]) => {
-    // Pobierz pozycje które mają już supplier_order_items - unikamy duplikatów
+  const saveOrderItems = async (itemsToOrder: any[]): Promise<string[]> => {
+    const createdSupplierOrderIds: string[] = [];
     const orderItemIds = itemsToOrder.map(item => item.id);
     const { data: existingSoi } = await supabase
       .from("supplier_order_items")
@@ -315,13 +380,11 @@ export default function ZaopatrzeniePage() {
       (existingSoi || []).map((r: { order_item_id: string }) => r.order_item_id)
     );
 
-    // Tylko pozycje które jeszcze nie mają supplier_order_items
     const itemsToCreate = itemsToOrder.filter(item => !existingOrderItemIds.has(item.id));
     if (itemsToCreate.length === 0) {
-      return; // Wszystkie już zapisane - brak duplikatów
+      return []; // Wszystkie już zapisane
     }
 
-    // Grupuj po dostawcy i dacie
     const today = new Date().toISOString().split('T')[0];
     const supplierGroups: { [key: string]: any[] } = {};
 
@@ -350,6 +413,7 @@ export default function ZaopatrzeniePage() {
         .single();
 
       if (error) throw error;
+      createdSupplierOrderIds.push(supplierOrder.id);
 
       const supplierOrderItems = items.map(item => ({
         supplier_order_id: supplierOrder.id,
@@ -364,6 +428,30 @@ export default function ZaopatrzeniePage() {
 
       if (itemsError) throw itemsError;
     }
+    return createdSupplierOrderIds;
+  };
+
+  const getNextPartialOrderNumber = async (baseNumber: string): Promise<string> => {
+    const baseNum = baseNumber.replace(/^(\d+)[a-z]*(\/\d{2}\/\d{4})$/, "$1$2");
+    const match = baseNum.match(/^(\d{1,4})(\/\d{2}\/\d{4})$/);
+    if (!match) return baseNumber + "a";
+    const [, numPart, suffix] = match;
+    const { data: existing } = await supabase
+      .from("orders")
+      .select("number")
+      .like("number", `${numPart}%`);
+    const usedLetters = new Set<string>();
+    const suffixEsc = suffix.replace(/\//g, "\\/");
+    (existing || []).forEach((o: { number: string }) => {
+      if (!o.number?.endsWith(suffix)) return;
+      const m = o.number.match(new RegExp(`^${numPart}([a-z])${suffixEsc}$`));
+      if (m) usedLetters.add(m[1]);
+    });
+    for (let i = 0; i < 26; i++) {
+      const letter = String.fromCharCode(97 + i);
+      if (!usedLetters.has(letter)) return `${numPart}${letter}${suffix}`;
+    }
+    return `${numPart}z${suffix}`;
   };
 
   const handleConfirmOrder = async () => {

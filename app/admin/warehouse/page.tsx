@@ -660,8 +660,8 @@ export default function WarehousePage() {
                       <TableBody>
                         {delivery.items.map((item: any) => (
                           <TableRow key={item.supplier_order_item_id} className={item.quantity_received > 0 ? "bg-green-50" : ""}>
-                            <TableCell className="font-medium">
-                              <div className="max-w-[200px] truncate" title={item.polish_product_name || item.product_name}>
+                            <TableCell className="font-medium min-w-[200px]">
+                              <div className="whitespace-normal break-words">
                                 {item.polish_product_name || item.product_name}
                               </div>
                             </TableCell>
@@ -808,7 +808,7 @@ export default function WarehousePage() {
                         <TableHeader>
                           <TableRow>
                             <TableHead className="w-12">#</TableHead>
-                            <TableHead className="min-w-[150px] max-w-[200px]">Produkt</TableHead>
+                            <TableHead className="min-w-[200px]">Produkt</TableHead>
                             <TableHead className="min-w-[100px] max-w-[120px] hidden md:table-cell">Dostawca</TableHead>
                             <TableHead className="w-20">Ilość</TableHead>
                             <TableHead className="w-24 text-center">Dostarczone</TableHead>
@@ -822,8 +822,8 @@ export default function WarehousePage() {
                               className={`${item.received_in_warehouse ? "bg-green-50" : ""} ${item.packed ? "bg-blue-50" : ""}`}
                             >
                               <TableCell className="text-sm w-12">{item.line_number}</TableCell>
-                              <TableCell className="font-medium min-w-[150px] max-w-[200px]">
-                                <div className="truncate" title={item.polish_product_name || item.product_name}>
+                              <TableCell className="font-medium min-w-[150px]">
+                                <div className="whitespace-normal break-words">
                                   {item.polish_product_name || item.product_name}
                                 </div>
                               </TableCell>
