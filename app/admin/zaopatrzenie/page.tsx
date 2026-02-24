@@ -95,7 +95,7 @@ export default function ZaopatrzeniePage() {
         setUserRole(profile?.role || "");
       }
 
-      // Load paid orders
+      // Zamówienia paid + dispatched - z items i supplier_order_items
       const { data: orders, error: ordersError } = await supabase
         .from("orders")
         .select(`
@@ -105,12 +105,12 @@ export default function ZaopatrzeniePage() {
           status,
           company:companies(name),
           created_by_profile:profiles!created_by(full_name, email),
-          items:order_items(id, product_name, quantity, unit_of_measure, unit_price)
+          items:order_items(id, product_name, quantity, unit_of_measure, unit_price, supplier_order_items(id))
         `)
-        .eq("status", "paid")
+        .in("status", ["paid", "dispatched"])
         .order("created_at", { ascending: false });
 
-      // Load totals for each order
+      // Load totals
       if (orders && orders.length > 0) {
         const orderIds = orders.map(o => o.id);
         const { data: totalsData } = await supabase
@@ -118,7 +118,6 @@ export default function ZaopatrzeniePage() {
           .select("order_id, grand_total, subtotal_without_vat, vat_amount")
           .in("order_id", orderIds);
 
-        // Merge totals with orders
         const ordersWithTotals = orders.map(order => ({
           ...order,
           totals: totalsData?.find(t => t.order_id === order.id) || {
@@ -128,44 +127,26 @@ export default function ZaopatrzeniePage() {
           }
         }));
 
-        setPaidOrders(ordersWithTotals);
+        // Aktywne = paid i NIE wszystkie pozycje zamówione | Archiwum = dispatched LUB wszystkie pozycje zamówione
+        const active: typeof ordersWithTotals = [];
+        const archived: typeof ordersWithTotals = [];
+        for (const order of ordersWithTotals) {
+          const items = order.items || [];
+          const allOrdered = items.length > 0 && items.every((item: any) =>
+            item.supplier_order_items && item.supplier_order_items.length > 0
+          );
+          const isDispatched = order.status === "dispatched";
+          if (isDispatched || allOrdered) {
+            archived.push(order);
+          } else {
+            active.push(order);
+          }
+        }
+        setPaidOrders(active);
+        setArchivedOrders(archived);
       } else {
         setPaidOrders(orders || []);
-      }
-
-      // Load archived orders (dispatched status)
-      const { data: archivedOrdersData, error: archivedError } = await supabase
-        .from("orders")
-        .select(`
-          id,
-          number,
-          created_at,
-          status,
-          company:companies(name),
-          created_by_profile:profiles!created_by(full_name, email),
-          items:order_items(id, product_name, quantity, unit_of_measure, unit_price)
-        `)
-        .eq("status", "dispatched")
-        .order("created_at", { ascending: false });
-
-      if (archivedOrdersData && archivedOrdersData.length > 0) {
-        const archivedOrderIds = archivedOrdersData.map(o => o.id);
-        const { data: archivedTotalsData } = await supabase
-          .from("order_totals")
-          .select("order_id, grand_total, subtotal_without_vat, vat_amount")
-          .in("order_id", archivedOrderIds);
-
-        const archivedOrdersWithTotals = archivedOrdersData.map(order => ({
-          ...order,
-          totals: archivedTotalsData?.find(t => t.order_id === order.id) || {
-            grand_total: 0,
-            subtotal_without_vat: 0,
-            vat_amount: 0
-          }
-        }));
-        setArchivedOrders(archivedOrdersWithTotals);
-      } else {
-        setArchivedOrders(archivedOrdersData || []);
+        setArchivedOrders([]);
       }
 
       // Load suppliers
@@ -659,7 +640,7 @@ export default function ZaopatrzeniePage() {
                               <Eye className="h-4 w-4 mr-1" />
                               Szczegóły
                             </Button>
-                            {(userRole === "admin" || userRole === "staff_admin") && (
+                            {(userRole === "admin" || userRole === "staff_admin") && order.status === "dispatched" && (
                               <Button
                                 size="sm"
                                 variant="outline"
