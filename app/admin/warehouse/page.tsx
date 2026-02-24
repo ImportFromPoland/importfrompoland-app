@@ -66,10 +66,12 @@ export default function WarehousePage() {
             deliveryMap.set(key, {
               supplier: supplierOrder.supplier_name,
               order_date: supplierOrder.order_date,
-              supplier_order_id: supplierOrder.id,
+              supplier_order_ids: [supplierOrder.id], // Wszystkie SO dla tego dostawcy+daty (przy duplikatach)
               items: [],
-              itemIds: new Set() // Track added items to prevent duplicates
+              orderItemIds: new Set()
             });
+          } else {
+            deliveryMap.get(key).supplier_order_ids.push(supplierOrder.id);
           }
           
           supplierOrder.supplier_order_items?.forEach((item: any) => {
@@ -85,19 +87,16 @@ export default function WarehousePage() {
             }
             
             // Skip items that have already been received in warehouse
-            // This ensures each item only appears once in deliveries, even if re-ordered
-            // This is the key check - show items until warehouse process is complete
             if (item.order_item.received_in_warehouse === true) {
               return;
             }
             
-            // Use supplier_order_item_id as unique identifier to prevent duplicates
-            const itemId = item.id;
+            // Deduplikacja po order_item_id - każdy produkt raz na dostawę (naprawia duplikaty z wielokrotnego zapisu)
+            const orderItemId = item.order_item.id;
             const delivery = deliveryMap.get(key);
             
-            // Only add if not already added
-            if (!delivery.itemIds.has(itemId)) {
-              delivery.itemIds.add(itemId);
+            if (!delivery.orderItemIds.has(orderItemId)) {
+              delivery.orderItemIds.add(orderItemId);
               delivery.items.push({
                 ...item.order_item,
                 supplier_order_item_id: item.id,
@@ -112,12 +111,10 @@ export default function WarehousePage() {
           });
         });
 
-        // Remove itemIds from final result (it was only for tracking)
-        // Also filter out deliveries that have no items (all items were from dispatched/delivered orders)
         const deliveries = Array.from(deliveryMap.values())
           .map(delivery => {
-            const { itemIds, ...rest } = delivery;
-            return rest;
+            const { orderItemIds, supplier_order_ids, ...rest } = delivery;
+            return { ...rest, supplier_order_id: supplier_order_ids[0], supplier_order_ids };
           })
           .filter(delivery => delivery.items.length > 0); // Only keep deliveries with items
         
@@ -230,14 +227,22 @@ export default function WarehousePage() {
 
   const handleConfirmDelivery = async (supplierOrderId: string) => {
     try {
-      // Update supplier order status to received
-      await supabase
-        .from("supplier_orders")
-        .update({ status: "received" })
-        .eq("id", supplierOrderId);
+      const delivery = deliveries.find(d => 
+        d.supplier_order_id === supplierOrderId || 
+        (d.supplier_order_ids && d.supplier_order_ids.includes(supplierOrderId))
+      );
+      if (!delivery) return;
+
+      // Update all supplier orders for this delivery (w przypadku duplikatów)
+      const idsToUpdate = delivery.supplier_order_ids || [supplierOrderId];
+      for (const id of idsToUpdate) {
+        await supabase
+          .from("supplier_orders")
+          .update({ status: "received" })
+          .eq("id", id);
+      }
 
       // Update order items to mark them as received in warehouse
-      const delivery = deliveries.find(d => d.supplier_order_id === supplierOrderId);
       if (delivery) {
         for (const item of delivery.items) {
           await supabase
@@ -252,7 +257,10 @@ export default function WarehousePage() {
 
       // Remove delivery from local state
       setDeliveries(prevDeliveries => 
-        prevDeliveries.filter(d => d.supplier_order_id !== supplierOrderId)
+        prevDeliveries.filter(d => {
+          const ids = d.supplier_order_ids || [d.supplier_order_id];
+          return !ids.includes(supplierOrderId);
+        })
       );
 
       // Reload packing orders to show newly received items

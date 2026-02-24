@@ -11,6 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Badge } from "@/components/ui/badge";
 import { formatDate, formatCurrency } from "@/lib/utils";
 import { Package, Plus, ShoppingCart, Eye, ExternalLink, Archive } from "lucide-react";
 
@@ -69,6 +70,8 @@ export default function ZaopatrzeniePage() {
     original_supplier_name?: string;
     net_cost_pln: number;
     ordered_from_supplier: boolean;
+    received_in_warehouse?: boolean;
+    packed?: boolean;
   }>>([]);
   const [userRole, setUserRole] = useState<string>("");
 
@@ -224,7 +227,9 @@ export default function ZaopatrzeniePage() {
           supplier_name,
           original_supplier_name,
           net_cost_pln,
-          ordered_from_supplier
+          ordered_from_supplier,
+          received_in_warehouse,
+          packed
         `)
         .eq("order_id", order.id)
         .order("line_number");
@@ -244,7 +249,9 @@ export default function ZaopatrzeniePage() {
             supplier_name,
             original_supplier_name,
             net_cost_pln,
-            ordered_from_supplier
+            ordered_from_supplier,
+            received_in_warehouse,
+            packed
           `)
           .eq("order_id", order.id)
           .order("line_number");
@@ -316,11 +323,28 @@ export default function ZaopatrzeniePage() {
   };
 
   const saveOrderItems = async (itemsToOrder: any[]) => {
-    // Group items by supplier and date
+    // Pobierz pozycje które mają już supplier_order_items - unikamy duplikatów
+    const orderItemIds = itemsToOrder.map(item => item.id);
+    const { data: existingSoi } = await supabase
+      .from("supplier_order_items")
+      .select("order_item_id")
+      .in("order_item_id", orderItemIds);
+
+    const existingOrderItemIds = new Set(
+      (existingSoi || []).map((r: { order_item_id: string }) => r.order_item_id)
+    );
+
+    // Tylko pozycje które jeszcze nie mają supplier_order_items
+    const itemsToCreate = itemsToOrder.filter(item => !existingOrderItemIds.has(item.id));
+    if (itemsToCreate.length === 0) {
+      return; // Wszystkie już zapisane - brak duplikatów
+    }
+
+    // Grupuj po dostawcy i dacie
     const today = new Date().toISOString().split('T')[0];
     const supplierGroups: { [key: string]: any[] } = {};
 
-    itemsToOrder.forEach(item => {
+    itemsToCreate.forEach(item => {
       const key = `${item.supplier_name}_${today}`;
       if (!supplierGroups[key]) {
         supplierGroups[key] = [];
@@ -328,7 +352,6 @@ export default function ZaopatrzeniePage() {
       supplierGroups[key].push(item);
     });
 
-    // Create supplier orders for each group
     for (const [key, items] of Object.entries(supplierGroups)) {
       const [supplierName] = key.split('_');
       const totalCostPLN = items.reduce((sum, item) => sum + (item.net_cost_pln * item.quantity), 0);
@@ -347,7 +370,6 @@ export default function ZaopatrzeniePage() {
 
       if (error) throw error;
 
-      // Create supplier order items
       const supplierOrderItems = items.map(item => ({
         supplier_order_id: supplierOrder.id,
         order_item_id: item.id,
@@ -378,35 +400,12 @@ export default function ZaopatrzeniePage() {
         return;
       }
 
-      // Save the order items first
+      // Save the order items - only creates supplier_order_items for items that don't have them yet
       await saveOrderItems(itemsToOrder);
 
-      // Check if all items are ordered
-      const allItemsOrdered = orderItems.every(item => item.ordered_from_supplier && item.supplier_name);
-      const someItemsOrdered = orderItems.some(item => item.ordered_from_supplier && item.supplier_name);
-
-
-      if (allItemsOrdered) {
-        // All items ordered - move to archive (dispatched status)
-        const { error: updateError } = await supabase
-          .from("orders")
-          .update({ status: "dispatched" })
-          .eq("id", selectedOrder.id);
-
-        if (updateError) throw updateError;
-        alert("Zamówienie potwierdzone i przeniesione do archiwum!");
-      } else if (someItemsOrdered) {
-        // Some items ordered - partially packed
-        const { error: updateError } = await supabase
-          .from("orders")
-          .update({ status: "partially_packed" })
-          .eq("id", selectedOrder.id);
-
-        if (updateError) throw updateError;
-        alert("Zamówienie częściowo potwierdzone!");
-      }
-
-      // Close details and reload data
+      // NIE zmieniamy statusu zamówienia - tylko magazyn może oznaczyć jako wysłane.
+      // Zaopatrzenie tylko potwierdza pojedyncze produkty u dostawców.
+      alert("Produkty zapisane jako zamówione u dostawców. Zamówienie pozostaje aktywne do odbioru w magazynie.");
       setSelectedOrder(null);
       loadData();
     } catch (error) {
@@ -712,7 +711,7 @@ export default function ZaopatrzeniePage() {
                         disabled={!orderItems.some(item => item.ordered_from_supplier && item.supplier_name)}
                       >
                         <Package className="h-4 w-4 mr-1" />
-                        Potwierdź zamówienie
+                        Zapisz zamówienia u dostawców
                       </Button>
                     </>
                   )}
@@ -725,14 +724,14 @@ export default function ZaopatrzeniePage() {
                 </div>
                 {orderItems.length > 0 && selectedOrder.status === "paid" && (
                   <div className="text-xs text-muted-foreground">
-                    Zaznacz produkty jako &quot;Zamówione&quot; i wpisz dostawców, aby móc potwierdzić zamówienie
+                    Zaznacz pojedyncze produkty jako &quot;Zamówione&quot; i wpisz dostawców. Status wysłane ustawia tylko magazyn.
                   </div>
                 )}
               </div>
             </div>
           </CardHeader>
           <CardContent>
-            <Table>
+              <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>Produkt</TableHead>
@@ -741,6 +740,7 @@ export default function ZaopatrzeniePage() {
                   <TableHead className="text-center">Ilość</TableHead>
                   <TableHead>Dostawca</TableHead>
                   <TableHead className="text-right">Koszt netto PLN (za szt.)</TableHead>
+                  <TableHead className="text-center">Status</TableHead>
                   <TableHead className="text-center">Zamówione</TableHead>
                 </TableRow>
               </TableHeader>
@@ -834,6 +834,17 @@ export default function ZaopatrzeniePage() {
                           <span className="text-sm">{item.net_cost_pln ? formatCurrency(item.net_cost_pln, "PLN") : '-'}</span>
                         )}
                       </div>
+                    </TableCell>
+                    <TableCell className="text-center">
+                      {item.packed ? (
+                        <Badge variant="default" className="bg-green-600">Dotarł i spakowany</Badge>
+                      ) : item.received_in_warehouse ? (
+                        <Badge variant="secondary">Dotarł (do spakowania)</Badge>
+                      ) : item.ordered_from_supplier ? (
+                        <Badge variant="outline">Zamówione (w dostawie)</Badge>
+                      ) : (
+                        <Badge variant="outline" className="text-muted-foreground">Do zamówienia</Badge>
+                      )}
                     </TableCell>
                     <TableCell className="text-center">
                       <Checkbox
