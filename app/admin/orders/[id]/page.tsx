@@ -1052,8 +1052,8 @@ export default function AdminOrderDetailPage() {
             </CardContent>
           </Card>
 
-          {/* Internal Costs & Profitability (Admin Only) */}
-          {["confirmed", "partially_received", "ready_to_ship", "shipped"].includes(order.status) && (
+          {/* Internal Costs & Profitability (Admin Only) - widoczne od confirmed do delivered, żeby dodać koszt dostawy po kompletacji */}
+          {["confirmed", "paid", "partially_packed", "packed", "partially_dispatched", "dispatched", "partially_delivered", "delivered"].includes(order.status) && (
             <Card className="border-orange-200 bg-orange-50">
               <CardHeader>
                 <CardTitle className="text-orange-900">Internal Costs & Profitability</CardTitle>
