@@ -8,7 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Package, MapPin, ShoppingCart, Calendar, Trash2, RotateCcw } from "lucide-react";
+import { Plus, Package, MapPin, ShoppingCart, Calendar, Trash2, RotateCcw, Calculator } from "lucide-react";
+import { Input } from "@/components/ui/input";
 import { formatDate, formatCurrency } from "@/lib/utils";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import SettingsForm from "@/components/SettingsForm";
@@ -28,6 +29,9 @@ function ClientTabsFixed({ baskets, orders, tours, myTours = [], userRole }: Cli
   const [activeTab, setActiveTab] = useState("orders");
   const [deletingBasket, setDeletingBasket] = useState<string | null>(null);
   const [revertingOrder, setRevertingOrder] = useState<string | null>(null);
+  const [plnPrice, setPlnPrice] = useState<string>("");
+
+  const eurPrice = plnPrice.trim() ? (parseFloat(plnPrice.replace(",", ".")) / 3.1) : null;
 
   useEffect(() => {
     const tab = searchParams.get("tab");
@@ -186,6 +190,35 @@ function ClientTabsFixed({ baskets, orders, tours, myTours = [], userRole }: Cli
             </Link>
           </Button>
         </div>
+
+        {/* Instant Price Checker */}
+        <Card className="bg-primary/5 border-primary/20">
+          <CardContent className="py-4">
+            <div className="flex flex-wrap items-center gap-4">
+              <div className="flex items-center gap-2">
+                <Calculator className="h-5 w-5 text-primary" />
+                <span className="font-medium">Instant price checker</span>
+              </div>
+              <div className="flex items-center gap-3 flex-1 min-w-[200px]">
+                <Input
+                  type="text"
+                  inputMode="decimal"
+                  placeholder="Enter price in PLN"
+                  value={plnPrice}
+                  onChange={(e) => setPlnPrice(e.target.value)}
+                  className="max-w-[180px]"
+                />
+                <span className="text-muted-foreground"> PLN</span>
+                {eurPrice !== null && !isNaN(eurPrice) && (
+                  <span className="font-semibold text-primary">
+                    ≈ {formatCurrency(eurPrice, "EUR")}
+                  </span>
+                )}
+              </div>
+              <span className="text-xs text-muted-foreground">(1 EUR = 3.1 PLN)</span>
+            </div>
+          </CardContent>
+        </Card>
 
         {/* Baskets Section */}
         <section>
