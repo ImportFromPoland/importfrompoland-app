@@ -215,7 +215,7 @@ function ClientTabsFixed({ baskets, orders, tours, myTours = [], userRole }: Cli
                   </span>
                 )}
               </div>
-              <span className="text-xs text-muted-foreground">(1 EUR = 3.1 PLN)</span>
+              <span className="text-xs text-muted-foreground">including service and fully insured delivery to Ireland</span>
             </div>
           </CardContent>
         </Card>
