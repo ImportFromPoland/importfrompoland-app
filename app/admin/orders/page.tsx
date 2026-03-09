@@ -15,7 +15,9 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Eye, Package, Truck, CheckCircle2, CreditCard, Plus } from "lucide-react";
 import MarkAsPaidButton from "@/components/MarkAsPaidButton";
+import MarkAsDeliveredButton from "@/components/MarkAsDeliveredButton";
 import SuperadminDeleteButton from "@/components/SuperadminDeleteButton";
+import DeliveredOrdersWithSearch from "@/components/DeliveredOrdersWithSearch";
 
 export default async function AdminOrdersPage() {
   const supabase = await createClient();
@@ -267,8 +269,12 @@ export default async function AdminOrdersPage() {
                             )}
                           </TableCell>
                           <TableCell className="text-right">
-                            <div className="flex items-center justify-end gap-2">
+                            <div className="flex flex-wrap items-center justify-end gap-2">
                               <MarkAsPaidButton 
+                                orderId={order.id}
+                                currentStatus={order.status}
+                              />
+                              <MarkAsDeliveredButton
                                 orderId={order.id}
                                 currentStatus={order.status}
                               />
@@ -301,80 +307,15 @@ export default async function AdminOrdersPage() {
           <Card>
             <CardHeader>
               <CardTitle>Dostarczone Zamówienia</CardTitle>
+              <p className="text-sm text-muted-foreground">
+                Wyszukaj po numerze zamówienia lub nazwisku klienta
+              </p>
             </CardHeader>
             <CardContent>
-              <div className="overflow-x-auto">
-                <Table className="w-full">
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="w-[15%]">Nr Zamówienia</TableHead>
-                      <TableHead className="w-[25%]">Klient</TableHead>
-                      <TableHead className="w-[20%]">Nazwa Koszyka</TableHead>
-                      <TableHead className="w-[10%]">Pozycje</TableHead>
-                      <TableHead className="w-[15%]">Złożono</TableHead>
-                      <TableHead className="w-[15%]">Dostarczono</TableHead>
-                      <TableHead className="w-[10%] text-right">Suma</TableHead>
-                      <TableHead className="w-[10%] text-right">Akcje</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {deliveredOrders.length === 0 ? (
-                      <TableRow>
-                        <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
-                          Brak dostarczonych zamówień
-                        </TableCell>
-                      </TableRow>
-                    ) : (
-                      deliveredOrders.map((order) => (
-                        <TableRow key={order.id} className="hover:bg-gray-50">
-                          <TableCell className="font-medium">
-                            {order.number || "-"}
-                          </TableCell>
-                          <TableCell>
-                            <div className="font-medium">{order.company?.name}</div>
-                            {order.created_by_profile?.full_name && (
-                              <div className="text-xs text-muted-foreground">
-                                {order.created_by_profile.full_name}
-                              </div>
-                            )}
-                          </TableCell>
-                          <TableCell className="text-sm text-muted-foreground">
-                            {order.client_notes || "-"}
-                          </TableCell>
-                          <TableCell>{order.items?.length || 0}</TableCell>
-                          <TableCell className="text-sm text-muted-foreground">
-                            {formatDate(order.submitted_at || order.created_at)}
-                          </TableCell>
-                          <TableCell className="text-sm text-muted-foreground">
-                            {formatDate(order.updated_at)}
-                          </TableCell>
-                          <TableCell className="text-right font-semibold">
-                            {order.totals
-                              ? formatCurrency(order.totals.grand_total, order.currency)
-                              : "-"}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <div className="flex items-center justify-end gap-2">
-                              <Link href={`/admin/orders/${order.id}`}>
-                                <Button variant="ghost" size="sm">
-                                  <Eye className="h-4 w-4 mr-1" />
-                                  Zobacz
-                                </Button>
-                              </Link>
-                              {isSuperadmin && (
-                                <SuperadminDeleteButton
-                                  itemId={order.id}
-                                  itemType="order"
-                                />
-                              )}
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))
-                    )}
-                  </TableBody>
-                </Table>
-              </div>
+              <DeliveredOrdersWithSearch
+                orders={deliveredOrders}
+                isSuperadmin={!!isSuperadmin}
+              />
             </CardContent>
           </Card>
         </TabsContent>
