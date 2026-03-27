@@ -243,7 +243,7 @@ function generateSimplePDF(order: any, invoice: any, totals: any): string {
   </div>
   
   <p style="margin-top: 40px; font-size: 0.9em; color: #666;">
-    Note: Prices in PLN are converted at rate €1 = 3.1 PLN (includes service and delivery to Ireland)
+    Note: Prices in PLN are converted at rate €1 = 2.95 PLN (includes service and delivery to Ireland). Historical lines use the rate stored on the order.
   </p>
 </body>
 </html>`;
@@ -253,7 +253,7 @@ function calculateLineTotal(item: any, order: any): number {
   let subtotal = item.unit_price * item.quantity;
   
   if (item.currency === "PLN" && order.currency === "EUR") {
-    subtotal = subtotal * (item.fx_rate || 0.3225806451612903);
+    subtotal = subtotal * (item.fx_rate ?? 0.3225806451612903);
   }
   
   if (item.discount_percent) {

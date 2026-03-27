@@ -16,7 +16,7 @@ export function formatCurrency(amount: number, currency: string = "EUR"): string
   }).format(amount);
 }
 
-// Convert PLN to EUR using the fixed rate (1 / 3.1)
+// Convert PLN to EUR using the fixed rate (see EUR_TO_PLN_DIVISOR in constants)
 export function convertPLNtoEUR(amountPLN: number): number {
   return amountPLN * PLN_TO_EUR_RATE;
 }
@@ -58,7 +58,7 @@ export function calculateLineTotal(
 
   // Apply currency conversion if needed
   if (item.currency === "PLN" && orderCurrency === "EUR") {
-    subtotal = subtotal * (item.fx_rate || PLN_TO_EUR_RATE);
+    subtotal = subtotal * (item.fx_rate ?? PLN_TO_EUR_RATE);
   }
 
   // Apply line discount

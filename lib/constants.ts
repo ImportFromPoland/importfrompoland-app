@@ -1,8 +1,11 @@
 // Constants for the application
 
 // Critical: PLN to EUR conversion rate (includes service + delivery to Ireland)
-export const PLN_TO_EUR_RATE = 0.3225806451612903; // 1 / 3.1
-export const EUR_TO_PLN_DIVISOR = 3.1;
+export const EUR_TO_PLN_DIVISOR = 2.95;
+export const PLN_TO_EUR_RATE = 1 / EUR_TO_PLN_DIVISOR;
+
+/** Stored on old order lines; use when `fx_rate` is null for display only */
+export const LEGACY_PLN_TO_EUR_RATE = 1 / 3.1;
 
 export const ORDER_STATUSES = [
   "draft",

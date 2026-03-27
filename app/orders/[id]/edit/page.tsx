@@ -385,7 +385,7 @@ export default function EditOrderPage() {
                   </thead>
                   <tbody>
                     {lines.map((line, index) => {
-                      // Calculate line total: PLN price * quantity / 3.1 (includes VAT + delivery)
+                      // PLN gross → EUR gross via PLN_TO_EUR_RATE (includes VAT + delivery)
                       const unitPriceEUR = line.unit_price > 0 
                         ? line.unit_price * PLN_TO_EUR_RATE 
                         : 0;

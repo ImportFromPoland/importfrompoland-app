@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Badge } from "@/components/ui/badge";
+import { EUR_TO_PLN_DIVISOR } from "@/lib/constants";
 import { Plus, Package, MapPin, ShoppingCart, Calendar, Trash2, RotateCcw, Calculator } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { formatDate, formatCurrency } from "@/lib/utils";
@@ -31,7 +32,9 @@ function ClientTabsFixed({ baskets, orders, tours, myTours = [], userRole }: Cli
   const [revertingOrder, setRevertingOrder] = useState<string | null>(null);
   const [plnPrice, setPlnPrice] = useState<string>("");
 
-  const eurPrice = plnPrice.trim() ? (parseFloat(plnPrice.replace(",", ".")) / 3.1) : null;
+  const eurPrice = plnPrice.trim()
+    ? parseFloat(plnPrice.replace(",", ".")) / EUR_TO_PLN_DIVISOR
+    : null;
 
   useEffect(() => {
     const tab = searchParams.get("tab");

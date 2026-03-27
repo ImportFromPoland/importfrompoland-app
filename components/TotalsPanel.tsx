@@ -85,7 +85,7 @@ export function TotalsPanel({
             <div className="group relative">
               <Info className="h-4 w-4 text-muted-foreground cursor-help" />
               <div className="absolute right-0 top-6 w-64 p-2 bg-gray-900 text-white text-xs rounded shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-10">
-                PLN prices are converted by ÷3.1 which includes service & delivery to Ireland
+                PLN prices are converted using the current rate (includes service & delivery to Ireland)
               </div>
             </div>
           )}

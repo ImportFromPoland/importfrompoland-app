@@ -11,6 +11,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { PDFLink } from "@/components/PDFLink";
 import { Logo } from "@/components/Logo";
 import { formatDate, formatCurrency } from "@/lib/utils";
+import { LEGACY_PLN_TO_EUR_RATE } from "@/lib/constants";
 import { TotalsPanel } from "@/components/TotalsPanel";
 import { Send, Edit2, Check, X, FileText, RotateCcw } from "lucide-react";
 
@@ -344,9 +345,10 @@ export default function OrderDetailPage() {
                       <tbody>
                         {order.items.map((item: any) => {
                           // Convert PLN to EUR (client entered gross PLN)
-                          const unitPriceEUR = item.currency === 'PLN' 
-                            ? item.unit_price / 3.1 
-                            : item.unit_price;
+                          const unitPriceEUR =
+                            item.currency === 'PLN'
+                              ? item.unit_price * (item.fx_rate ?? LEGACY_PLN_TO_EUR_RATE)
+                              : item.unit_price;
                           const lineTotalEUR = unitPriceEUR * item.quantity;
                           
                           return (

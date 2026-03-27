@@ -12,7 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatusBadge } from "@/components/StatusBadge";
 import { formatDate, formatCurrency } from "@/lib/utils";
 import { TotalsPanel } from "@/components/TotalsPanel";
-import { PLN_TO_EUR_RATE } from "@/lib/constants";
+import { PLN_TO_EUR_RATE, EUR_TO_PLN_DIVISOR, LEGACY_PLN_TO_EUR_RATE } from "@/lib/constants";
 import {
   Table,
   TableBody,
@@ -145,7 +145,8 @@ export default function AdminOrderDetailPage() {
         
         // Calculate original net price from gross price with default 23% VAT
         if (item.currency === "PLN" && order.currency === "EUR") {
-          const grossEUR = item.unit_price * PLN_TO_EUR_RATE;
+          const grossEUR =
+            item.unit_price * (item.fx_rate ?? PLN_TO_EUR_RATE);
           originalNetPrice = grossEUR / 1.23; // Remove 23% VAT
         } else if (item.currency === order.currency) {
           originalNetPrice = item.unit_price / 1.23; // Remove 23% VAT
@@ -206,7 +207,8 @@ export default function AdminOrderDetailPage() {
         
         // Convert PLN to EUR if needed
         if (item.currency === "PLN" && order.currency === "EUR") {
-          lineGrossEUR = lineGrossPLN * PLN_TO_EUR_RATE;
+          lineGrossEUR =
+            lineGrossPLN * (item.fx_rate ?? PLN_TO_EUR_RATE);
         }
         
         // Calculate NET from GROSS (remove VAT)
@@ -765,7 +767,11 @@ export default function AdminOrderDetailPage() {
                           </TableCell>
                           <TableCell className="text-right font-medium">
                             {formatCurrency(
-                              item.unit_price * item.quantity / 3.1,
+                              item.currency === 'PLN'
+                                ? item.unit_price *
+                                    item.quantity *
+                                    (item.fx_rate ?? LEGACY_PLN_TO_EUR_RATE)
+                                : item.unit_price * item.quantity,
                               "EUR"
                             )}
                           </TableCell>
@@ -1098,10 +1104,10 @@ export default function AdminOrderDetailPage() {
                     </span>
                   </div>
                   <div className="flex justify-between text-sm">
-                    <span>Total Cost in EUR (@ 3.1):</span>
+                    <span>Total Cost in EUR (@ {EUR_TO_PLN_DIVISOR}):</span>
                     <span className="font-medium">
                       {formatCurrency(
-                        items.reduce((sum, item) => sum + ((item.net_cost_pln || 0) * item.quantity) + ((item.logistics_cost_pln || 0) * item.quantity), 0) / 3.1,
+                        items.reduce((sum, item) => sum + ((item.net_cost_pln || 0) * item.quantity) + ((item.logistics_cost_pln || 0) * item.quantity), 0) / EUR_TO_PLN_DIVISOR,
                         "EUR"
                       )}
                     </span>
