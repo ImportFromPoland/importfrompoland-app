@@ -1,6 +1,6 @@
 import React from 'react';
 import { Document, Page, Text, View, StyleSheet, Image } from '@react-pdf/renderer';
-import { LEGACY_PLN_TO_EUR_RATE } from '@/lib/constants';
+import { orderLineGrossEURDisplay, orderLineUnitGrossEURDisplay } from '@/lib/utils';
 
 // PDF Styles
 const styles = StyleSheet.create({
@@ -385,11 +385,8 @@ export const OrderPDF: React.FC<OrderPDFProps> = ({ order, company, items, total
 
             {/* Table Rows */}
             {items.map((item, index) => {
-              // PLN gross → EUR gross using stored fx_rate (legacy 1/3.1 if missing)
-              const grossEUR =
-                item.currency === 'PLN'
-                  ? item.unit_price * (item.fx_rate ?? LEGACY_PLN_TO_EUR_RATE)
-                  : item.unit_price;
+              const grossEUR = orderLineUnitGrossEURDisplay(item, order);
+              const lineGrossEUR = orderLineGrossEURDisplay(item, order);
               
               // For 0% VAT orders, show the same net price as 23% VAT orders would have
               // This ensures consistency and avoids confusion
@@ -406,7 +403,7 @@ export const OrderPDF: React.FC<OrderPDFProps> = ({ order, company, items, total
                 // For 23% VAT: normal calculation
                 netEUR = grossEUR / (1 + (order.vat_rate / 100));
                 lineTotal = netEUR * item.quantity;
-                displayTotal = grossEUR * item.quantity; // Show gross total for 23% VAT
+                displayTotal = lineGrossEUR; // Show gross total for 23% VAT
               }
               
               return (

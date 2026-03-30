@@ -10,8 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatusBadge } from "@/components/StatusBadge";
 import { PDFLink } from "@/components/PDFLink";
 import { Logo } from "@/components/Logo";
-import { formatDate, formatCurrency } from "@/lib/utils";
-import { LEGACY_PLN_TO_EUR_RATE } from "@/lib/constants";
+import { formatDate, formatCurrency, orderLineGrossEURDisplay, orderLineUnitGrossEURDisplay } from "@/lib/utils";
 import { TotalsPanel } from "@/components/TotalsPanel";
 import { Send, Edit2, Check, X, FileText, RotateCcw } from "lucide-react";
 
@@ -344,12 +343,8 @@ export default function OrderDetailPage() {
                       </thead>
                       <tbody>
                         {order.items.map((item: any) => {
-                          // Convert PLN to EUR (client entered gross PLN)
-                          const unitPriceEUR =
-                            item.currency === 'PLN'
-                              ? item.unit_price * (item.fx_rate ?? LEGACY_PLN_TO_EUR_RATE)
-                              : item.unit_price;
-                          const lineTotalEUR = unitPriceEUR * item.quantity;
+                          const lineTotalEUR = orderLineGrossEURDisplay(item, order);
+                          const unitPriceEUR = orderLineUnitGrossEURDisplay(item, order);
                           
                           return (
                             <tr key={item.id} className="border-b">

@@ -201,6 +201,8 @@ export default function NewOrderPage() {
             unit_price: line.unit_price,
             quantity: line.quantity,
             currency: line.currency,
+            fx_rate:
+              line.currency === "PLN" && currency === "EUR" ? PLN_TO_EUR_RATE : null,
             discount_percent: line.discount_percent,
             notes: line.notes,
             attachment_url: line.attachment_url,
@@ -274,6 +276,8 @@ export default function NewOrderPage() {
             unit_price: line.unit_price,
             quantity: line.quantity,
             currency: line.currency,
+            fx_rate:
+              line.currency === "PLN" && currency === "EUR" ? PLN_TO_EUR_RATE : null,
             unit_of_measure: line.unit_of_measure || "unit",
             discount_percent: line.discount_percent,
             notes: line.notes,
