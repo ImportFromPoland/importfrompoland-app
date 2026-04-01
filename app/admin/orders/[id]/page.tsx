@@ -10,9 +10,9 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatusBadge } from "@/components/StatusBadge";
-import { formatDate, formatCurrency } from "@/lib/utils";
+import { formatDate, formatCurrency, orderLineGrossEURDisplay } from "@/lib/utils";
 import { TotalsPanel } from "@/components/TotalsPanel";
-import { PLN_TO_EUR_RATE, EUR_TO_PLN_DIVISOR, LEGACY_PLN_TO_EUR_RATE } from "@/lib/constants";
+import { PLN_TO_EUR_RATE, EUR_TO_PLN_DIVISOR } from "@/lib/constants";
 import {
   Table,
   TableBody,
@@ -42,6 +42,7 @@ export default function AdminOrderDetailPage() {
   const [items, setItems] = useState<any[]>([]);
   const [totals, setTotals] = useState<any>(null);
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
+  const [isStaffAdmin, setIsStaffAdmin] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -50,6 +51,20 @@ export default function AdminOrderDetailPage() {
   const loadData = async () => {
     setLoading(true);
     try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (user) {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("role")
+          .eq("id", user.id)
+          .single();
+        setIsStaffAdmin(profile?.role === "staff_admin");
+      } else {
+        setIsStaffAdmin(false);
+      }
+
       // Get order with items
       const { data: orderData } = await supabase
         .from("orders")
@@ -520,6 +535,12 @@ export default function AdminOrderDetailPage() {
     );
   }
 
+  const hasCostCols = ["confirmed", "partially_received", "ready_to_ship", "shipped"].includes(
+    order.status
+  );
+  const showLineRabat = isStaffAdmin && order.status !== "draft";
+  const itemTableColSpan = 10 + (showLineRabat ? 1 : 0) + (hasCostCols ? 4 : 0);
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -596,7 +617,14 @@ export default function AdminOrderDetailPage() {
           <Card>
             <CardHeader>
               <div className="flex items-center justify-between">
-                <CardTitle>Order Items</CardTitle>
+                <div>
+                  <CardTitle>Order Items</CardTitle>
+                  {showLineRabat && (
+                    <p className="text-sm text-muted-foreground font-normal mt-1">
+                      Rabat pozycji (%) — tylko Superadmin, po złożeniu zamówienia przez klienta
+                    </p>
+                  )}
+                </div>
                 <Button onClick={addNewItem} size="sm">
                   <Plus className="h-4 w-4 mr-2" />
                   Add Item
@@ -616,6 +644,9 @@ export default function AdminOrderDetailPage() {
                       <TableHead>Qty</TableHead>
                       <TableHead>Unit</TableHead>
                       <TableHead>Notes</TableHead>
+                      {showLineRabat && (
+                        <TableHead className="text-right w-[88px]">Rabat %</TableHead>
+                      )}
                       <TableHead className="text-right">Total (EUR)</TableHead>
                       {["confirmed", "partially_received", "ready_to_ship", "shipped"].includes(order.status) && (
                         <>
@@ -631,7 +662,7 @@ export default function AdminOrderDetailPage() {
                   <TableBody>
                     {items.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={["confirmed", "partially_received", "ready_to_ship", "shipped"].includes(order.status) ? 14 : 10} className="text-center py-8 text-muted-foreground">
+                        <TableCell colSpan={itemTableColSpan} className="text-center py-8 text-muted-foreground">
                           No items in this order
                         </TableCell>
                       </TableRow>
@@ -765,15 +796,28 @@ export default function AdminOrderDetailPage() {
                               </div>
                             )}
                           </TableCell>
+                          {showLineRabat && (
+                            <TableCell className="text-right">
+                              <Input
+                                type="number"
+                                min={0}
+                                max={100}
+                                step={0.5}
+                                key={`${item.id}-disc-${item.discount_percent ?? 0}`}
+                                defaultValue={item.discount_percent ?? 0}
+                                onBlur={(e) => {
+                                  const raw = parseFloat(e.target.value);
+                                  const v = Number.isFinite(raw)
+                                    ? Math.min(100, Math.max(0, raw))
+                                    : 0;
+                                  updateItem(item.id, { discount_percent: v });
+                                }}
+                                className="w-20 text-right"
+                              />
+                            </TableCell>
+                          )}
                           <TableCell className="text-right font-medium">
-                            {formatCurrency(
-                              item.currency === 'PLN'
-                                ? item.unit_price *
-                                    item.quantity *
-                                    (item.fx_rate ?? LEGACY_PLN_TO_EUR_RATE)
-                                : item.unit_price * item.quantity,
-                              "EUR"
-                            )}
+                            {formatCurrency(orderLineGrossEURDisplay(item, order), "EUR")}
                           </TableCell>
                           
                           {/* Cost Tracking Fields */}
