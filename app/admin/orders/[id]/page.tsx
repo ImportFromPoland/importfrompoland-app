@@ -621,7 +621,7 @@ export default function AdminOrderDetailPage() {
                   <CardTitle>Order Items</CardTitle>
                   {showLineRabat && (
                     <p className="text-sm text-muted-foreground font-normal mt-1">
-                      Rabat pozycji (%) — tylko Superadmin, po złożeniu zamówienia przez klienta
+                      Discount per line (%) — tylko Superadmin, po złożeniu zamówienia przez klienta
                     </p>
                   )}
                 </div>
@@ -645,7 +645,7 @@ export default function AdminOrderDetailPage() {
                       <TableHead>Unit</TableHead>
                       <TableHead>Notes</TableHead>
                       {showLineRabat && (
-                        <TableHead className="text-right w-[88px]">Rabat %</TableHead>
+                        <TableHead className="text-right w-[88px]">Discount %</TableHead>
                       )}
                       <TableHead className="text-right">Total (EUR)</TableHead>
                       {["confirmed", "partially_received", "ready_to_ship", "shipped"].includes(order.status) && (
