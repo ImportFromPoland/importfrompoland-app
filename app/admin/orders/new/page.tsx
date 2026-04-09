@@ -10,7 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { OrderLineForm, type OrderLineData } from "@/components/OrderLineForm";
 import { TotalsPanel } from "@/components/TotalsPanel";
-import { Plus, Save, ArrowLeft, User, Building2 } from "lucide-react";
+import { Plus, Save, ArrowLeft, Building2 } from "lucide-react";
 import { PLN_TO_EUR_RATE, DEFAULT_VAT_RATE } from "@/lib/constants";
 import {
   Select,
@@ -20,6 +20,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import Link from "next/link";
+import {
+  ClientCompanyCombobox,
+  formatCompanyClientLabel,
+  type CompanyWithProfiles,
+} from "@/components/ClientCompanyCombobox";
 
 export default function AdminNewBasketPage() {
   const router = useRouter();
@@ -27,9 +32,10 @@ export default function AdminNewBasketPage() {
 
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [companies, setCompanies] = useState<any[]>([]);
+  const [companies, setCompanies] = useState<CompanyWithProfiles[]>([]);
   const [selectedCompanyId, setSelectedCompanyId] = useState<string>("");
-  const [selectedCompany, setSelectedCompany] = useState<any>(null);
+  const [selectedCompany, setSelectedCompany] =
+    useState<CompanyWithProfiles | null>(null);
 
   const [currency, setCurrency] = useState<"EUR" | "PLN">("EUR");
   const [vatRate, setVatRate] = useState(DEFAULT_VAT_RATE);
@@ -61,7 +67,9 @@ export default function AdminNewBasketPage() {
     try {
       const { data, error } = await supabase
         .from("companies")
-        .select("*")
+        .select(
+          "*, profiles!fk_profiles_company ( full_name, email )"
+        )
         .order("name");
 
       if (error) throw error;
@@ -151,8 +159,8 @@ export default function AdminNewBasketPage() {
 
   const handleCompanyChange = (companyId: string) => {
     setSelectedCompanyId(companyId);
-    const company = companies.find(c => c.id === companyId);
-    setSelectedCompany(company);
+    const company = companies.find((c) => c.id === companyId);
+    setSelectedCompany(company ?? null);
   };
 
   const saveBasket = async () => {
@@ -271,33 +279,22 @@ export default function AdminNewBasketPage() {
               <div className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="company">Client Company</Label>
-                  <Select value={selectedCompanyId} onValueChange={handleCompanyChange}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select a client company..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {companies.map((company) => (
-                        <SelectItem key={company.id} value={company.id}>
-                          <div className="flex items-center gap-2">
-                            <Building2 className="h-4 w-4" />
-                            {company.name}
-                            {company.vat_number && (
-                              <span className="text-muted-foreground">
-                                (VAT: {company.vat_number})
-                              </span>
-                            )}
-                          </div>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <ClientCompanyCombobox
+                    id="company"
+                    companies={companies}
+                    value={selectedCompanyId}
+                    onValueChange={handleCompanyChange}
+                    placeholder="Select a client company…"
+                  />
                 </div>
 
                 {selectedCompany && (
                   <div className="p-4 bg-gray-50 rounded-lg">
                     <h4 className="font-medium text-sm mb-2">Selected Client:</h4>
                     <div className="text-sm text-gray-600">
-                      <div className="font-medium">{selectedCompany.name}</div>
+                      <div className="font-medium">
+                        {formatCompanyClientLabel(selectedCompany)}
+                      </div>
                       {selectedCompany.vat_number && (
                         <div>VAT: {selectedCompany.vat_number}</div>
                       )}
