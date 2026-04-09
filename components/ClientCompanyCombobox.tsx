@@ -1,16 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Building2, Check, ChevronsUpDown } from "lucide-react";
+import { Building2, Check, ChevronsUpDown, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from "@/components/ui/command";
 import {
   Popover,
   PopoverContent,
@@ -147,47 +139,70 @@ export function ClientCompanyCombobox({
         className="w-[var(--radix-popover-trigger-width)] p-0"
         align="start"
       >
-        <Command shouldFilter={false}>
-          <CommandInput
-            placeholder="Type to filter by company, name, or email…"
-            value={search}
-            onValueChange={setSearch}
-          />
-          <CommandList>
-            <CommandEmpty>No client matches.</CommandEmpty>
-            <CommandGroup>
-              {filtered.map((company) => {
+        <div className="rounded-md border border-border bg-popover text-popover-foreground shadow-md outline-none">
+          <div className="flex items-center border-b px-3">
+            <Search className="mr-2 h-4 w-4 shrink-0 text-muted-foreground" />
+            <input
+              type="text"
+              placeholder="Filter by company, name, or email…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="flex h-11 w-full rounded-md bg-transparent py-3 text-sm text-foreground outline-none placeholder:text-muted-foreground"
+              autoFocus
+            />
+          </div>
+          <div
+            className="max-h-[300px] overflow-y-auto overflow-x-hidden p-1"
+            role="listbox"
+            aria-label="Clients"
+          >
+            {filtered.length === 0 ? (
+              <div className="py-6 text-center text-sm text-muted-foreground">
+                No client matches.
+              </div>
+            ) : (
+              filtered.map((company) => {
                 const label = formatCompanyClientLabel(company);
+                const isSelected = value === company.id;
                 return (
-                  <CommandItem
+                  <button
                     key={company.id}
-                    value={company.id}
-                    onSelect={() => {
+                    type="button"
+                    role="option"
+                    aria-selected={isSelected}
+                    className={cn(
+                      "relative flex w-full cursor-pointer items-start gap-2 rounded-sm px-2 py-2 text-left text-sm text-foreground",
+                      "outline-none hover:bg-accent hover:text-accent-foreground",
+                      "focus-visible:bg-accent focus-visible:text-accent-foreground",
+                      isSelected && "bg-accent text-accent-foreground"
+                    )}
+                    onClick={() => {
                       onValueChange(company.id);
                       setOpen(false);
                     }}
                   >
                     <Check
                       className={cn(
-                        "mr-2 h-4 w-4 shrink-0",
-                        value === company.id ? "opacity-100" : "opacity-0"
+                        "mt-0.5 h-4 w-4 shrink-0",
+                        isSelected ? "opacity-100" : "opacity-0"
                       )}
+                      aria-hidden
                     />
-                    <span className="min-w-0 break-words">
-                      {label}
+                    <span className="min-w-0 break-words leading-snug">
+                      <span className="font-medium">{label}</span>
                       {company.vat_number ? (
-                        <span className="text-muted-foreground">
+                        <span className="text-muted-foreground font-normal">
                           {" "}
                           (VAT: {company.vat_number})
                         </span>
                       ) : null}
                     </span>
-                  </CommandItem>
+                  </button>
                 );
-              })}
-            </CommandGroup>
-          </CommandList>
-        </Command>
+              })
+            )}
+          </div>
+        </div>
       </PopoverContent>
     </Popover>
   );
