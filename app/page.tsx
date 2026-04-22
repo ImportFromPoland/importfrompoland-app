@@ -29,9 +29,9 @@ export default async function DashboardPage() {
     .eq("id", user.id)
     .single();
 
-  // If profile row isn't available yet (common right after signup), send user to onboarding
-  // rather than crashing by accessing profile fields.
-  if (profileError || !profile || !profile.company_id) {
+  // Keep onboarding minimal: only require the user's name.
+  // Company/address can be filled later in Settings (existing behavior).
+  if (profileError || !profile || !profile.full_name || profile.full_name.trim().length === 0) {
     redirect("/onboarding");
   }
 
@@ -44,17 +44,23 @@ export default async function DashboardPage() {
     redirect("/warehouse");
   }
 
+  const hasCompany = Boolean(profile.company_id);
+
   // Client dashboard - get baskets (draft) and orders (submitted+)
-  const { data: allOrders } = await supabase
-    .from("orders")
-    .select(`
+  const { data: allOrders } = hasCompany
+    ? await supabase
+        .from("orders")
+        .select(
+          `
       *,
       company:companies(name),
       items:order_items(id)
-    `)
-    .eq("company_id", profile.company_id)
-    .order("created_at", { ascending: false })
-    .limit(50);
+    `
+        )
+        .eq("company_id", profile.company_id)
+        .order("created_at", { ascending: false })
+        .limit(50)
+    : { data: [] as any[] };
 
   // Separate baskets from orders and sort them chronologically (newest first)
   const baskets = (allOrders?.filter(o => o.status === 'draft') || [])
@@ -131,15 +137,19 @@ export default async function DashboardPage() {
     })
   );
 
-  // Load user's tour bookings
-  const { data: myTours } = await supabase
-    .from('tour_bookings')
-    .select(`
+  // Load user's tour bookings (only if linked to a company)
+  const { data: myTours } = hasCompany
+    ? await supabase
+        .from("tour_bookings")
+        .select(
+          `
       *,
       tour:tours(*)
-    `)
-    .eq('company_id', profile.company_id)
-    .order('created_at', { ascending: false });
+    `
+        )
+        .eq("company_id", profile.company_id)
+        .order("created_at", { ascending: false })
+    : { data: [] as any[] };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -150,7 +160,7 @@ export default async function DashboardPage() {
               <Logo width={200} height={80} linkToDashboard={true} />
               <div>
                 <p className="text-sm text-muted-foreground">
-                  {profile.company?.name}
+                  {profile.company?.name ?? ""}
                 </p>
               </div>
             </div>
@@ -172,6 +182,21 @@ export default async function DashboardPage() {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {!hasCompany && (
+          <Card className="mb-6">
+            <CardHeader>
+              <CardTitle>Finish your profile anytime</CardTitle>
+              <CardDescription>
+                You can add company details and delivery address later in Settings. You’re ready to use the app.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Link href="/settings">
+                <Button variant="outline">Go to Settings</Button>
+              </Link>
+            </CardContent>
+          </Card>
+        )}
         <ClientTabsFixed 
           baskets={basketsWithTotals}
           orders={ordersWithTotals}
