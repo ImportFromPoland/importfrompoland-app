@@ -9,6 +9,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
+import { contactNamesFromProfiles } from "@/lib/company-contacts";
 
 export type CompanyProfileRow = {
   full_name: string | null;
@@ -28,19 +29,7 @@ export type CompanyWithProfiles = {
 };
 
 function contactNames(company: CompanyWithProfiles): string {
-  const raw = (company.profiles ?? [])
-    .map((p) => p.full_name?.trim())
-    .filter((s): s is string => Boolean(s));
-  const seen = new Set<string>();
-  const names: string[] = [];
-  for (let i = 0; i < raw.length; i++) {
-    const s = raw[i];
-    if (!seen.has(s)) {
-      seen.add(s);
-      names.push(s);
-    }
-  }
-  return names.join(", ");
+  return contactNamesFromProfiles(company.profiles);
 }
 
 /** Shown in the trigger and list rows: company plus linked client name(s) when available. */

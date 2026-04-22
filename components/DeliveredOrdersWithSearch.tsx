@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/table";
 import { Eye, Search } from "lucide-react";
 import { formatDate, formatCurrency } from "@/lib/utils";
+import { contactNamesFromProfiles } from "@/lib/company-contacts";
 import SuperadminDeleteButton from "@/components/SuperadminDeleteButton";
 
 interface DeliveredOrdersWithSearchProps {
@@ -33,12 +34,14 @@ export default function DeliveredOrdersWithSearch({
     return orders.filter((order) => {
       const number = (order.number || "").toLowerCase();
       const companyName = (order.company?.name || "").toLowerCase();
-      const fullName = (order.created_by_profile?.full_name || "").toLowerCase();
+      const contactLine = contactNamesFromProfiles(
+        order.company?.profiles
+      ).toLowerCase();
       const clientNotes = (order.client_notes || "").toLowerCase();
       return (
         number.includes(q) ||
         companyName.includes(q) ||
-        fullName.includes(q) ||
+        contactLine.includes(q) ||
         clientNotes.includes(q)
       );
     });
@@ -83,16 +86,20 @@ export default function DeliveredOrdersWithSearch({
                 </TableCell>
               </TableRow>
             ) : (
-              filteredOrders.map((order) => (
+              filteredOrders.map((order) => {
+                const contactSubtitle = contactNamesFromProfiles(
+                  order.company?.profiles
+                );
+                return (
                 <TableRow key={order.id} className="hover:bg-gray-50">
                   <TableCell className="font-medium">{order.number || "-"}</TableCell>
                   <TableCell>
                     <div className="font-medium">{order.company?.name}</div>
-                    {order.created_by_profile?.full_name && (
+                    {contactSubtitle ? (
                       <div className="text-xs text-muted-foreground">
-                        {order.created_by_profile.full_name}
+                        {contactSubtitle}
                       </div>
-                    )}
+                    ) : null}
                   </TableCell>
                   <TableCell className="text-sm text-muted-foreground">
                     {order.client_notes || "-"}
@@ -126,7 +133,8 @@ export default function DeliveredOrdersWithSearch({
                     </div>
                   </TableCell>
                 </TableRow>
-              ))
+                );
+              })
             )}
           </TableBody>
         </Table>

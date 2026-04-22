@@ -18,6 +18,19 @@ import MarkAsPaidButton from "@/components/MarkAsPaidButton";
 import MarkAsDeliveredButton from "@/components/MarkAsDeliveredButton";
 import SuperadminDeleteButton from "@/components/SuperadminDeleteButton";
 import DeliveredOrdersWithSearch from "@/components/DeliveredOrdersWithSearch";
+import { contactNamesFromProfiles } from "@/lib/company-contacts";
+
+function CompanyContactSubtitle({
+  profiles,
+}: {
+  profiles?: { full_name: string | null }[] | null;
+}) {
+  const contacts = contactNamesFromProfiles(profiles);
+  if (!contacts) return null;
+  return (
+    <div className="text-xs text-muted-foreground">{contacts}</div>
+  );
+}
 
 export default async function AdminOrdersPage() {
   const supabase = await createClient();
@@ -40,7 +53,11 @@ export default async function AdminOrdersPage() {
     .from("orders")
     .select(`
       *,
-      company:companies(name, vat_number),
+      company:companies(
+        name,
+        vat_number,
+        profiles!fk_profiles_company(full_name, email)
+      ),
       created_by_profile:profiles!created_by(full_name, email),
       items:order_items(id)
     `)
@@ -136,11 +153,9 @@ export default async function AdminOrdersPage() {
                           </TableCell>
                           <TableCell>
                             <div className="font-medium">{order.company?.name}</div>
-                            {order.created_by_profile?.full_name && (
-                              <div className="text-xs text-muted-foreground">
-                                {order.created_by_profile.full_name}
-                              </div>
-                            )}
+                            <CompanyContactSubtitle
+                              profiles={order.company?.profiles}
+                            />
                           </TableCell>
                           <TableCell>{order.items?.length || 0}</TableCell>
                           <TableCell className="text-sm text-muted-foreground">
@@ -218,11 +233,9 @@ export default async function AdminOrdersPage() {
                           </TableCell>
                           <TableCell>
                             <div className="font-medium">{order.company?.name}</div>
-                            {order.created_by_profile?.full_name && (
-                              <div className="text-xs text-muted-foreground">
-                                {order.created_by_profile.full_name}
-                              </div>
-                            )}
+                            <CompanyContactSubtitle
+                              profiles={order.company?.profiles}
+                            />
                             {order.company?.vat_number && (
                               <div className="text-xs text-muted-foreground">
                                 VAT: {order.company.vat_number}
