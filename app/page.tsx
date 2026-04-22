@@ -23,15 +23,15 @@ export default async function DashboardPage() {
   }
 
   // Get user profile with role
-  const { data: profile } = await supabase
+  const { data: profile, error: profileError } = await supabase
     .from("profiles")
     .select("*, company:companies(*)")
     .eq("id", user.id)
     .single();
 
-  // Only redirect to onboarding if profile exists and has no company_id
-  // Don't redirect if profile is null (could be RLS issue or profile doesn't exist)
-  if (profile && !profile.company_id) {
+  // If profile row isn't available yet (common right after signup), send user to onboarding
+  // rather than crashing by accessing profile fields.
+  if (profileError || !profile || !profile.company_id) {
     redirect("/onboarding");
   }
 
