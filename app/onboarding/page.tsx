@@ -41,34 +41,23 @@ export default function OnboardingPage() {
         throw new Error("No user found");
       }
 
-      // Create company (use "Private Client" if no company name provided)
-      const { data: company, error: companyError } = await supabase
-        .from("companies")
-        .insert({
-          name: formData.company_name || "Private Client",
-          vat_number: formData.vat_number,
-          address_line1: formData.address_line1,
-          address_line2: formData.address_line2,
-          city: formData.city,
-          postal_code: formData.postal_code,
-          country: formData.country,
-          phone: formData.phone,
-        })
-        .select()
-        .single();
+      const { data: companyId, error: onboardingError } = await supabase.rpc(
+        "complete_onboarding",
+        {
+          p_full_name: formData.full_name,
+          p_company_name: formData.company_name,
+          p_vat_number: formData.vat_number,
+          p_address_line1: formData.address_line1,
+          p_address_line2: formData.address_line2,
+          p_city: formData.city,
+          p_postal_code: formData.postal_code,
+          p_country: formData.country,
+          p_phone: formData.phone,
+        }
+      );
 
-      if (companyError) throw companyError;
-
-      // Update profile
-      const { error: profileError } = await supabase
-        .from("profiles")
-        .update({
-          full_name: formData.full_name,
-          company_id: company.id,
-        })
-        .eq("id", user.id);
-
-      if (profileError) throw profileError;
+      if (onboardingError) throw onboardingError;
+      if (!companyId) throw new Error("Onboarding failed: missing company id");
 
       router.push("/");
       router.refresh();
