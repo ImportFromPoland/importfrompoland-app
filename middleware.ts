@@ -58,13 +58,19 @@ export async function middleware(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
+  const pathname = request.nextUrl.pathname;
+  const isPublicRoute =
+    pathname === "/login" ||
+    pathname === "/reset-password" ||
+    pathname.startsWith("/api/auth");
+
   // Protected routes
-  if (!user && !request.nextUrl.pathname.startsWith("/login")) {
+  if (!user && !isPublicRoute) {
     return NextResponse.redirect(new URL("/login", request.url));
   }
 
   // Redirect authenticated users away from login
-  if (user && request.nextUrl.pathname.startsWith("/login")) {
+  if (user && pathname.startsWith("/login")) {
     return NextResponse.redirect(new URL("/", request.url));
   }
 
