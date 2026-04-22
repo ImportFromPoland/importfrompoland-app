@@ -26,9 +26,11 @@ export default function LoginPage() {
   const supabase = createClient();
 
   const getSiteUrl = () => {
+    // Important: for flows that store state in browser storage (PKCE),
+    // the redirect must stay on the same origin the user is currently on.
+    if (typeof window !== "undefined") return window.location.origin;
     const envUrl = process.env.NEXT_PUBLIC_SITE_URL;
     if (envUrl && envUrl.length > 0) return envUrl.replace(/\/$/, "");
-    if (typeof window !== "undefined") return window.location.origin;
     return "";
   };
 

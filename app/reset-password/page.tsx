@@ -31,6 +31,17 @@ export default function ResetPasswordPage() {
       setInitializing(true);
 
       try {
+        // Some Supabase recovery links may set session tokens in the URL hash.
+        // Calling getSession() will pick those up (if detectSessionInUrl is enabled by the client).
+        const initial = await supabase.auth.getSession();
+        if (initial.data.session) {
+          // Clean URL hash after session detection, to avoid leaking tokens via screenshots/copy.
+          if (window.location.hash) {
+            window.history.replaceState({}, document.title, window.location.pathname + window.location.search);
+          }
+          return;
+        }
+
         // When coming from Supabase email links, we may get `?code=...`.
         // Exchanging the code creates a session so `updateUser({ password })` works.
         const url = new URL(window.location.href);
