@@ -9,6 +9,7 @@ export async function POST(request: Request) {
   // Get the origin from the request
   const origin = new URL(request.url).origin;
   
-  return NextResponse.redirect(new URL("/logout", origin));
+  // Use 303 to force the next request to be GET (avoid POSTing to /logout).
+  return NextResponse.redirect(new URL("/logout", origin), { status: 303 });
 }
 

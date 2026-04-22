@@ -14,18 +14,48 @@ export default function ResetPasswordPage() {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [initializing, setInitializing] = useState(true);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
 
   const supabase = createClient();
 
   useEffect(() => {
-    // Check if user has a valid session from the reset link
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (!session) {
-        setError("Invalid or expired reset link. Please request a new one.");
+    let cancelled = false;
+
+    const init = async () => {
+      setError("");
+      setInitializing(true);
+
+      try {
+        // When coming from Supabase email links, we may get `?code=...`.
+        // Exchanging the code creates a session so `updateUser({ password })` works.
+        const url = new URL(window.location.href);
+        const code = url.searchParams.get("code");
+        if (code) {
+          const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
+          if (exchangeError) throw exchangeError;
+
+          // Clean the URL (remove code) after exchanging.
+          url.searchParams.delete("code");
+          window.history.replaceState({}, document.title, url.toString());
+        }
+
+        const { data } = await supabase.auth.getSession();
+        if (!data.session) {
+          setError("Invalid or expired reset link. Please request a new one.");
+        }
+      } catch (e: any) {
+        setError(e?.message ?? "Invalid or expired reset link. Please request a new one.");
+      } finally {
+        if (!cancelled) setInitializing(false);
       }
-    });
+    };
+
+    init();
+    return () => {
+      cancelled = true;
+    };
   }, [supabase]);
 
   const handleResetPassword = async (e: React.FormEvent) => {
@@ -120,8 +150,8 @@ export default function ResetPasswordPage() {
                 </div>
               )}
 
-              <Button type="submit" className="w-full" disabled={loading}>
-                {loading ? "Updating..." : "Update Password"}
+              <Button type="submit" className="w-full" disabled={loading || initializing || !!error}>
+                {initializing ? "Preparing..." : loading ? "Updating..." : "Update Password"}
               </Button>
 
               <div className="text-center text-sm">

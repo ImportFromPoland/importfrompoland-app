@@ -25,6 +25,13 @@ export default function LoginPage() {
 
   const supabase = createClient();
 
+  const getSiteUrl = () => {
+    const envUrl = process.env.NEXT_PUBLIC_SITE_URL;
+    if (envUrl && envUrl.length > 0) return envUrl.replace(/\/$/, "");
+    if (typeof window !== "undefined") return window.location.origin;
+    return "";
+  };
+
   const clearForm = () => {
     setEmail("");
     setPassword("");
@@ -50,7 +57,7 @@ export default function LoginPage() {
       if (isForgotPassword) {
         // Password reset flow
         const { error } = await supabase.auth.resetPasswordForEmail(email, {
-          redirectTo: `${window.location.origin}/reset-password`,
+          redirectTo: `${getSiteUrl()}/reset-password`,
         });
 
         if (error) throw error;
@@ -62,7 +69,7 @@ export default function LoginPage() {
           email,
           password,
           options: {
-            emailRedirectTo: `${window.location.origin}/`,
+            emailRedirectTo: `${getSiteUrl()}/`,
           },
         });
 
