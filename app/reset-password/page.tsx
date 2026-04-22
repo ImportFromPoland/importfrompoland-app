@@ -36,22 +36,16 @@ export default function ResetPasswordPage() {
         const url = new URL(window.location.href);
         const code = url.searchParams.get("code");
         if (code) {
-          // PKCE code exchange requires a locally-stored code_verifier that was created
-          // in the same browser when the reset flow was initiated.
-          // If it's missing (e.g. link opened on another device/profile), show a helpful error.
-          const codeVerifierKeyPrefix = "auth-token-code-verifier";
-          const hasAnyCodeVerifier =
-            typeof window !== "undefined" &&
-            Object.keys(window.localStorage).some((k) => k.includes(codeVerifierKeyPrefix));
-
-          if (!hasAnyCodeVerifier) {
-            throw new Error(
-              "This reset link must be opened in the same browser where you requested it. Please request a new reset link and open it on this device."
-            );
-          }
-
           const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
-          if (exchangeError) throw exchangeError;
+          if (exchangeError) {
+            const msg = (exchangeError.message || "").toLowerCase();
+            if (msg.includes("code verifier") || msg.includes("code_verifier")) {
+              throw new Error(
+                "This reset link must be opened in the same browser where you requested it. Please request a new reset link and open it on this device."
+              );
+            }
+            throw exchangeError;
+          }
 
           // Clean the URL (remove code) after exchanging.
           url.searchParams.delete("code");
