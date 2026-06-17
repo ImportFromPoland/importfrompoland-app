@@ -9,7 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { StatusBadge } from "@/components/StatusBadge";
 import { Badge } from "@/components/ui/badge";
 import { EUR_TO_PLN_DIVISOR } from "@/lib/constants";
-import { Plus, Package, MapPin, ShoppingCart, Calendar, Trash2, RotateCcw, Calculator } from "lucide-react";
+import { Plus, Package, MapPin, ShoppingCart, Calendar, Trash2, RotateCcw, Calculator, Layers } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { formatDate, formatCurrency } from "@/lib/utils";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -31,6 +31,9 @@ function ClientTabsFixed({ baskets, orders, tours, myTours = [], userRole }: Cli
   const [deletingBasket, setDeletingBasket] = useState<string | null>(null);
   const [revertingOrder, setRevertingOrder] = useState<string | null>(null);
   const [plnPrice, setPlnPrice] = useState<string>("");
+  const [setCode, setSetCode] = useState("");
+  const [loadingSet, setLoadingSet] = useState(false);
+  const [setCodeError, setSetCodeError] = useState("");
 
   const eurPrice = plnPrice.trim()
     ? parseFloat(plnPrice.replace(",", ".")) / EUR_TO_PLN_DIVISOR
@@ -48,6 +51,34 @@ function ClientTabsFixed({ baskets, orders, tours, myTours = [], userRole }: Cli
     const params = new URLSearchParams(searchParams);
     params.set("tab", value);
     router.push(`?${params.toString()}`, { scroll: false });
+  };
+
+  const loadBasketSet = async () => {
+    const code = setCode.trim();
+    if (!code) {
+      setSetCodeError("Enter a set code");
+      return;
+    }
+
+    setLoadingSet(true);
+    setSetCodeError("");
+    try {
+      const supabase = createClient();
+      const { data: orderId, error } = await supabase.rpc("create_basket_from_set", {
+        p_code: code,
+      });
+
+      if (error) throw error;
+      if (!orderId) throw new Error("Could not create basket from set");
+
+      setSetCode("");
+      router.push(`/orders/${orderId}`);
+      router.refresh();
+    } catch (error: any) {
+      setSetCodeError(error.message || "Could not load basket set");
+    } finally {
+      setLoadingSet(false);
+    }
   };
 
   const revertToBasket = async (orderId: string) => {
@@ -220,6 +251,41 @@ function ClientTabsFixed({ baskets, orders, tours, myTours = [], userRole }: Cli
               </div>
               <span className="text-xs text-muted-foreground">including service and fully insured delivery to Ireland</span>
             </div>
+          </CardContent>
+        </Card>
+
+        {/* Load pre-defined basket set */}
+        <Card>
+          <CardContent className="py-4">
+            <div className="flex flex-wrap items-end gap-4">
+              <div className="flex items-center gap-2">
+                <Layers className="h-5 w-5 text-primary" />
+                <span className="font-medium">Load basket set</span>
+              </div>
+              <div className="flex flex-1 flex-wrap items-center gap-3 min-w-[240px]">
+                <Input
+                  value={setCode}
+                  onChange={(e) => {
+                    setSetCode(e.target.value);
+                    if (setCodeError) setSetCodeError("");
+                  }}
+                  placeholder="Enter set code, e.g. IFP-BATH-001"
+                  className="max-w-xs"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      loadBasketSet();
+                    }
+                  }}
+                />
+                <Button onClick={loadBasketSet} disabled={loadingSet}>
+                  {loadingSet ? "Loading..." : "Create basket"}
+                </Button>
+              </div>
+            </div>
+            {setCodeError && (
+              <p className="text-sm text-red-600 mt-3">{setCodeError}</p>
+            )}
           </CardContent>
         </Card>
 

@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/Logo";
-import { Package, Users, Warehouse, FileText, Settings, ShoppingCart, MapPin, BarChart3, TrendingUp } from "lucide-react";
+import { Package, Users, Warehouse, FileText, Settings, ShoppingCart, MapPin, BarChart3, TrendingUp, Layers } from "lucide-react";
 import InternalCostsProfit from "@/components/InternalCostsProfit";
 import ClientInfoCard from "@/components/ClientInfoCard";
 
@@ -208,6 +208,7 @@ export default async function AdminLayout({
     { name: "ERP", href: "/admin/erp", icon: TrendingUp },
     { name: "Magazyn", href: "/admin/warehouse", icon: Warehouse },
     ...(isStaffAdmin ? [{ name: "Użytkownicy", href: "/admin/users", icon: Users }] : []),
+    ...(isStaffAdmin ? [{ name: "Zestawy", href: "/admin/basket-sets", icon: Layers }] : []),
     // Settings - only for super admin
     ...(isStaffAdmin ? [{ name: "Ustawienia", href: "/admin/settings", icon: Settings }] : []),
     // Analytics - only for super admin
