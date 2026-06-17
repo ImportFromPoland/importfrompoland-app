@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Trash2 } from "lucide-react";
 
@@ -20,6 +21,7 @@ export default function SuperadminDeleteButton({
 }: SuperadminDeleteButtonProps) {
   const [deleting, setDeleting] = useState(false);
   const router = useRouter();
+  const supabase = createClient();
 
   const handleDelete = async () => {
     const confirmMessage = {
@@ -47,9 +49,6 @@ export default function SuperadminDeleteButton({
         if (!response.ok) throw new Error(result.error || "Erase failed");
         alert("Client erased successfully.");
       } else {
-        const { createClient } = await import("@/lib/supabase/client");
-        const supabase = createClient();
-
         const { error: itemsError } = await supabase
           .from("order_items")
           .delete()
