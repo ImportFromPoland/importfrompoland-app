@@ -96,42 +96,9 @@ export default function EditOrderPage() {
           }))
           .sort((a: any, b: any) => (a.line_number || 0) - (b.line_number || 0));
         
-        // Ensure we have at least 10 lines for table view
-        const maxLineNumber = Math.max(...loadedLines.map((l: any) => l.line_number), 0);
-        const emptyLines: OrderLineData[] = [];
-        for (let i = loadedLines.length; i < 10; i++) {
-          emptyLines.push({
-            line_number: maxLineNumber + i + 1,
-            product_name: "",
-            website_url: "",
-            supplier_name: "",
-            unit_price: 0,
-            quantity: 1,
-            currency: "PLN",
-            unit_of_measure: "unit",
-            discount_percent: 0,
-            notes: "",
-          });
-        }
-        setLines([...loadedLines, ...emptyLines]);
+        setLines(loadedLines);
       } else {
-        // No items, add 10 empty lines for table view
-        const emptyLines: OrderLineData[] = [];
-        for (let i = 0; i < 10; i++) {
-          emptyLines.push({
-            line_number: i + 1,
-            product_name: "",
-            website_url: "",
-            supplier_name: "",
-            unit_price: 0,
-            quantity: 1,
-            currency: "PLN",
-            unit_of_measure: "unit",
-            discount_percent: 0,
-            notes: "",
-          });
-        }
-        setLines(emptyLines);
+        setLines([]);
       }
     } catch (error: any) {
       console.error("Error loading order:", error);
@@ -259,7 +226,7 @@ export default function EditOrderPage() {
       // Insert updated items
       const items = lines
         .filter((line) => line.product_name && line.unit_price > 0)
-        .map((line) => {
+        .map((line, index) => {
           // Calculate original net price from gross price with default 23% VAT
           let originalNetPrice = 0;
           if (line.currency === "PLN" && currency === "EUR") {
@@ -273,7 +240,7 @@ export default function EditOrderPage() {
 
           return {
             order_id: order.id,
-            line_number: line.line_number,
+            line_number: index + 1,
             product_name: line.product_name,
             website_url: line.website_url,
             supplier_name: line.supplier_name,
