@@ -34,6 +34,8 @@ function ClientTabsFixed({ baskets, orders, tours, myTours = [], userRole }: Cli
   const [setCode, setSetCode] = useState("");
   const [loadingSet, setLoadingSet] = useState(false);
   const [setCodeError, setSetCodeError] = useState("");
+  const [individualOffers, setIndividualOffers] = useState<any[]>([]);
+  const [acceptingOffer, setAcceptingOffer] = useState<string | null>(null);
 
   const eurPrice = plnPrice.trim()
     ? parseFloat(plnPrice.replace(",", ".")) / EUR_TO_PLN_DIVISOR
@@ -45,6 +47,80 @@ function ClientTabsFixed({ baskets, orders, tours, myTours = [], userRole }: Cli
       setActiveTab(tab);
     }
   }, [searchParams]);
+
+  useEffect(() => {
+    loadIndividualOffers();
+  }, []);
+
+  const loadIndividualOffers = async () => {
+    try {
+      const supabase = createClient();
+      const { data: offers } = await supabase
+        .from("individual_offers")
+        .select("id, offer_number, current_version_id, company_id")
+        .not("current_version_id", "is", null);
+
+      if (!offers?.length) {
+        setIndividualOffers([]);
+        return;
+      }
+
+      const enriched = await Promise.all(
+        offers.map(async (offer) => {
+          const { data: version } = await supabase
+            .from("individual_offer_versions")
+            .select("*")
+            .eq("id", offer.current_version_id)
+            .single();
+          if (!version || !["sent", "viewed", "accepted"].includes(version.status)) {
+            return null;
+          }
+          const { data: lines } = await supabase
+            .from("individual_offer_lines")
+            .select("*")
+            .eq("offer_version_id", version.id)
+            .order("line_number");
+          const { data: links } = await supabase
+            .from("individual_offer_spec_links")
+            .select("*")
+            .eq("offer_version_id", version.id)
+            .order("sort_order");
+          return { ...offer, version, lines: lines || [], links: links || [] };
+        })
+      );
+
+      setIndividualOffers(enriched.filter(Boolean));
+    } catch (error) {
+      console.error("Error loading individual offers:", error);
+    }
+  };
+
+  const acceptOffer = async (versionId: string) => {
+    if (
+      !confirm(
+        "Confirm this offer? This will create an order and our team will prepare confirmation and payment details."
+      )
+    ) {
+      return;
+    }
+
+    setAcceptingOffer(versionId);
+    try {
+      const supabase = createClient();
+      const { data: orderId, error } = await supabase.rpc("accept_individual_offer", {
+        p_version_id: versionId,
+      });
+      if (error) throw error;
+      alert("Offer accepted. Thank you!");
+      router.refresh();
+      await loadIndividualOffers();
+      if (orderId) router.push(`/orders/${orderId}`);
+    } catch (error: any) {
+      alert(error.message || "Could not accept offer");
+    } finally {
+      setAcceptingOffer(null);
+    }
+  };
 
   const handleTabChange = (value: string) => {
     setActiveTab(value);
@@ -288,6 +364,93 @@ function ClientTabsFixed({ baskets, orders, tours, myTours = [], userRole }: Cli
             )}
           </CardContent>
         </Card>
+
+        {/* Individual offers (windows, roofs, etc.) */}
+        {individualOffers.length > 0 && (
+          <section>
+            <h3 className="text-xl font-semibold mb-4">Individual Offers</h3>
+            <div className="grid gap-4">
+              {individualOffers.map((offer: any) => {
+                const expired =
+                  offer.version?.valid_until &&
+                  new Date(offer.version.valid_until) < new Date(new Date().toDateString());
+                const total = (offer.lines || []).reduce(
+                  (sum: number, line: any) => sum + Number(line.amount),
+                  0
+                );
+                return (
+                  <Card key={offer.id}>
+                    <CardHeader>
+                      <div className="flex items-start justify-between gap-4">
+                        <div>
+                          <CardTitle className="text-lg">
+                            {offer.version.title}
+                          </CardTitle>
+                          <CardDescription>
+                            {offer.offer_number} · v{offer.version.version_number} · Valid
+                            until {formatDate(offer.version.valid_until)}
+                          </CardDescription>
+                        </div>
+                        <StatusBadge status={offer.version.status} />
+                      </div>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="text-sm space-y-1">
+                        {(offer.lines || []).map((line: any) => (
+                          <div key={line.id} className="flex justify-between">
+                            <span>{line.label}</span>
+                            <span>{formatCurrency(line.amount, "EUR")}</span>
+                          </div>
+                        ))}
+                        <div className="flex justify-between font-semibold border-t pt-2">
+                          <span>Total (gross)</span>
+                          <span>{formatCurrency(total, "EUR")}</span>
+                        </div>
+                      </div>
+
+                      {offer.links?.length > 0 && (
+                        <div className="text-sm">
+                          <p className="font-medium mb-1">Specifications</p>
+                          <ul className="space-y-1">
+                            {offer.links.map((link: any) => (
+                              <li key={link.id}>
+                                <a
+                                  href={link.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-blue-600 hover:underline"
+                                >
+                                  {link.title}
+                                </a>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+
+                      {offer.version.status === "accepted" ? (
+                        <p className="text-sm text-green-700">Offer accepted — thank you.</p>
+                      ) : expired ? (
+                        <p className="text-sm text-amber-700">
+                          This offer has expired. Please contact us for an updated quote.
+                        </p>
+                      ) : (
+                        <Button
+                          onClick={() => acceptOffer(offer.version.id)}
+                          disabled={acceptingOffer === offer.version.id}
+                        >
+                          {acceptingOffer === offer.version.id
+                            ? "Confirming..."
+                            : "Confirm order"}
+                        </Button>
+                      )}
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          </section>
+        )}
 
         {/* Baskets Section */}
         <section>

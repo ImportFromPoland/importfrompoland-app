@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/Logo";
-import { Package, Users, Warehouse, FileText, Settings, ShoppingCart, MapPin, BarChart3, TrendingUp, Layers } from "lucide-react";
+import { Package, Users, Warehouse, FileText, Settings, ShoppingCart, MapPin, BarChart3, TrendingUp, Layers, FileSpreadsheet } from "lucide-react";
 import InternalCostsProfit from "@/components/InternalCostsProfit";
 import ClientInfoCard from "@/components/ClientInfoCard";
 
@@ -199,6 +199,7 @@ export default async function AdminLayout({
       count: submittedOrdersCount || 0 
     },
     { name: "Zaopatrzenie", href: "/admin/zaopatrzenie", icon: ShoppingCart },
+    { name: "Oferty", href: "/admin/offers", icon: FileSpreadsheet },
     { 
       name: "Wycieczki", 
       href: "/admin/tours", 

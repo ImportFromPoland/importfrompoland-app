@@ -21,7 +21,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { formatDate } from "@/lib/utils";
-import { Shield, Users as UsersIcon, ChevronDown, ChevronRight } from "lucide-react";
+import { Shield, Users as UsersIcon, ChevronDown, ChevronRight, Plus } from "lucide-react";
 import SuperadminDeleteButton from "@/components/SuperadminDeleteButton";
 
 const ROLE_COLORS: Record<string, string> = {
@@ -44,6 +44,15 @@ export default function AdminUsersPage() {
   const [users, setUsers] = useState<any[]>([]);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [expandedUsers, setExpandedUsers] = useState<Set<string>>(new Set());
+  const [showCreateClient, setShowCreateClient] = useState(false);
+  const [creatingClient, setCreatingClient] = useState(false);
+  const [createForm, setCreateForm] = useState({
+    full_name: "",
+    email: "",
+    phone: "",
+    company_name: "",
+  });
+  const [createMessage, setCreateMessage] = useState("");
 
   useEffect(() => {
     loadUsers();
@@ -72,6 +81,7 @@ export default function AdminUsersPage() {
           *,
           company:companies(*)
         `)
+        .is("gdpr_erased_at", null)
         .order("created_at", { ascending: false });
 
       // Use email directly from profiles table (it already has email column)
@@ -93,6 +103,29 @@ export default function AdminUsersPage() {
       }
       return newSet;
     });
+  };
+
+  const createClient = async () => {
+    setCreatingClient(true);
+    setCreateMessage("");
+    try {
+      const response = await fetch("/api/admin/create-client", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(createForm),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Create failed");
+
+      setCreateMessage(result.message || "Client created");
+      setCreateForm({ full_name: "", email: "", phone: "", company_name: "" });
+      setShowCreateClient(false);
+      await loadUsers();
+    } catch (error: any) {
+      setCreateMessage("Error: " + error.message);
+    } finally {
+      setCreatingClient(false);
+    }
   };
 
   const updateUserRole = async (userId: string, newRole: string) => {
@@ -203,12 +236,85 @@ export default function AdminUsersPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold">User Management</h1>
-        <p className="text-muted-foreground">
-          Manage user roles and permissions
-        </p>
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold">User Management</h1>
+          <p className="text-muted-foreground">
+            Manage user roles and permissions
+          </p>
+        </div>
+        {["admin", "staff_admin"].includes(currentUser?.role) && (
+          <Button onClick={() => setShowCreateClient(!showCreateClient)}>
+            <Plus className="h-4 w-4 mr-2" />
+            New client
+          </Button>
+        )}
       </div>
+
+      {showCreateClient && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Create client</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Email or phone required. WhatsApp-only clients can use phone only — a placeholder email is created. Client signs in later via Forgot password after you set a real email.
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="text-sm font-medium">Full name *</label>
+                <input
+                  className="mt-1 w-full border rounded px-3 py-2"
+                  value={createForm.full_name}
+                  onChange={(e) =>
+                    setCreateForm({ ...createForm, full_name: e.target.value })
+                  }
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium">Email</label>
+                <input
+                  type="email"
+                  className="mt-1 w-full border rounded px-3 py-2"
+                  value={createForm.email}
+                  onChange={(e) =>
+                    setCreateForm({ ...createForm, email: e.target.value })
+                  }
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium">Phone</label>
+                <input
+                  className="mt-1 w-full border rounded px-3 py-2"
+                  value={createForm.phone}
+                  onChange={(e) =>
+                    setCreateForm({ ...createForm, phone: e.target.value })
+                  }
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium">Company name (optional)</label>
+                <input
+                  className="mt-1 w-full border rounded px-3 py-2"
+                  value={createForm.company_name}
+                  onChange={(e) =>
+                    setCreateForm({ ...createForm, company_name: e.target.value })
+                  }
+                  placeholder="Defaults to full name"
+                />
+              </div>
+            </div>
+            {createMessage && (
+              <p className={`text-sm ${createMessage.startsWith("Error") ? "text-red-600" : "text-green-600"}`}>
+                {createMessage}
+              </p>
+            )}
+            <Button onClick={createClient} disabled={creatingClient}>
+              {creatingClient ? "Creating..." : "Create client"}
+            </Button>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -267,6 +373,7 @@ export default function AdminUsersPage() {
                 <TableRow>
                   <TableHead>Name</TableHead>
                   <TableHead>Email</TableHead>
+                  <TableHead>Phone</TableHead>
                   <TableHead>Company</TableHead>
                   <TableHead>Role</TableHead>
                   <TableHead>Status</TableHead>
@@ -277,7 +384,7 @@ export default function AdminUsersPage() {
               <TableBody>
                 {users.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
                       No users found
                     </TableCell>
                   </TableRow>
@@ -305,8 +412,9 @@ export default function AdminUsersPage() {
                             )}
                           </div>
                         </TableCell>
-                        <TableCell>{user.email}</TableCell>
-                        <TableCell>{user.company?.name || "-"}</TableCell>
+                        <TableCell>{user.email}{user.email_is_placeholder ? " (placeholder)" : ""}</TableCell>
+                        <TableCell>{user.phone || user.company?.phone || "-"}</TableCell>
+                        <TableCell>{user.company?.name || user.full_name || "-"}</TableCell>
                         <TableCell>
                           <Badge className={ROLE_COLORS[user.role]}>
                             {ROLE_LABELS[user.role]}
@@ -342,7 +450,7 @@ export default function AdminUsersPage() {
                             </Select>
                             {currentUser?.role === "staff_admin" && user.role === "client" && (
                               <SuperadminDeleteButton
-                                itemId={user.company_id}
+                                itemId={user.id}
                                 itemType="client"
                                 onDelete={() => loadUsers()}
                               />
@@ -352,7 +460,7 @@ export default function AdminUsersPage() {
                       </TableRow>,
                       ...(isExpanded ? [
                         <TableRow key={`${user.id}-details`}>
-                          <TableCell colSpan={7} className="p-0">
+                          <TableCell colSpan={8} className="p-0">
                             {renderUserDetails(user)}
                           </TableCell>
                         </TableRow>
