@@ -105,7 +105,7 @@ export default function AdminUsersPage() {
     });
   };
 
-  const createClient = async () => {
+  const handleCreateClient = async () => {
     setCreatingClient(true);
     setCreateMessage("");
     try {
@@ -309,7 +309,7 @@ export default function AdminUsersPage() {
                 {createMessage}
               </p>
             )}
-            <Button onClick={createClient} disabled={creatingClient}>
+            <Button onClick={handleCreateClient} disabled={creatingClient}>
               {creatingClient ? "Creating..." : "Create client"}
             </Button>
           </CardContent>

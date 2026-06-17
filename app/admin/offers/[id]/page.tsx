@@ -8,7 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { formatDate, formatCurrency } from "@/lib/utils";
-import { Copy, RefreshCw } from "lucide-react";
+import { Copy, RefreshCw, Share2, Download } from "lucide-react";
+import { downloadIndividualOfferPdf } from "@/lib/individual-offer-pdf";
 
 export default function AdminOfferDetailPage() {
   const params = useParams();
@@ -20,6 +21,7 @@ export default function AdminOfferDetailPage() {
   const [lines, setLines] = useState<any[]>([]);
   const [specLinks, setSpecLinks] = useState<any[]>([]);
   const [working, setWorking] = useState(false);
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
 
   useEffect(() => {
     loadOffer();
@@ -65,7 +67,7 @@ export default function AdminOfferDetailPage() {
     }
   };
 
-  const sendToClient = async () => {
+  const shareWithClient = async () => {
     if (!version) return;
     setWorking(true);
     try {
@@ -156,6 +158,41 @@ export default function AdminOfferDetailPage() {
       alert(e.message);
     } finally {
       setWorking(false);
+    }
+  };
+
+  const downloadPdf = async () => {
+    if (!offer || !version) return;
+    setDownloadingPdf(true);
+    try {
+      await downloadIndividualOfferPdf(
+        {
+          offerNumber: offer.offer_number,
+          versionNumber: version.version_number,
+          title: version.title,
+          validUntil: version.valid_until,
+          clientName: offer.client?.full_name,
+          clientEmail: offer.client?.email,
+          companyName: offer.company?.name,
+          clientNotes: version.client_notes,
+          lines: lines.map((line) => ({
+            label: line.label,
+            amount: Number(line.amount),
+            vat_rate: Number(line.vat_rate),
+            notes: line.notes,
+          })),
+          specLinks: specLinks.map((link) => ({
+            title: link.title,
+            url: link.url,
+          })),
+          isDraft: version.status === "draft",
+        },
+        `Offer_${offer.offer_number}`
+      );
+    } catch (e: any) {
+      alert(e.message || "Could not generate PDF");
+    } finally {
+      setDownloadingPdf(false);
     }
   };
 
@@ -266,9 +303,19 @@ export default function AdminOfferDetailPage() {
           )}
 
           <div className="flex flex-wrap gap-2 pt-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={downloadPdf}
+              disabled={downloadingPdf}
+            >
+              <Download className="h-4 w-4 mr-2" />
+              {downloadingPdf ? "Generating…" : "Download PDF"}
+            </Button>
             {version?.status === "draft" && (
-              <Button onClick={sendToClient} disabled={working}>
-                Send to client
+              <Button onClick={shareWithClient} disabled={working}>
+                <Share2 className="h-4 w-4 mr-2" />
+                Share with client
               </Button>
             )}
             {version?.status !== "accepted" && (

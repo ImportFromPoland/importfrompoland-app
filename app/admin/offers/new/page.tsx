@@ -9,7 +9,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, Save } from "lucide-react";
+import { Plus, Save, Share2, Download } from "lucide-react";
+import {
+  ClientProfileCombobox,
+  type ClientProfileOption,
+} from "@/components/ClientProfileCombobox";
+import { downloadIndividualOfferPdf } from "@/lib/individual-offer-pdf";
 
 type Line = {
   line_number: number;
@@ -32,7 +37,7 @@ const emptyLine = (n: number): Line => ({
 export default function NewOfferPage() {
   const router = useRouter();
   const supabase = createClient();
-  const [clients, setClients] = useState<any[]>([]);
+  const [clients, setClients] = useState<ClientProfileOption[]>([]);
   const [clientId, setClientId] = useState("");
   const [title, setTitle] = useState("");
   const [validUntil, setValidUntil] = useState("");
@@ -42,6 +47,7 @@ export default function NewOfferPage() {
   const [lines, setLines] = useState<Line[]>([emptyLine(1)]);
   const [specLinks, setSpecLinks] = useState<SpecLink[]>([{ title: "", url: "" }]);
   const [saving, setSaving] = useState(false);
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -61,7 +67,7 @@ export default function NewOfferPage() {
     setClients(data || []);
   };
 
-  const saveOffer = async (sendToClient: boolean) => {
+  const saveOffer = async (shareWithClient: boolean) => {
     if (!clientId || !title.trim() || !validUntil) {
       setError("Client, title and valid until are required");
       return;
@@ -107,7 +113,7 @@ export default function NewOfferPage() {
         .insert({
           offer_id: offer.id,
           version_number: 1,
-          status: sendToClient ? "sent" : "draft",
+          status: shareWithClient ? "sent" : "draft",
           valid_until: validUntil,
           title: title.trim(),
           client_notes: clientNotes.trim() || title.trim(),
@@ -160,6 +166,40 @@ export default function NewOfferPage() {
     }
   };
 
+  const downloadPdf = async () => {
+    setDownloadingPdf(true);
+    try {
+      const client = clients.find((c) => c.id === clientId);
+      const validLines = lines.filter((l) => l.label.trim() && l.amount > 0);
+      const links = specLinks.filter((l) => l.title.trim() && l.url.trim());
+
+      await downloadIndividualOfferPdf(
+        {
+          offerNumber: "PREVIEW",
+          title: title.trim() || "Individual offer",
+          validUntil: validUntil || new Date().toISOString().slice(0, 10),
+          clientName: client?.full_name,
+          clientEmail: client?.email,
+          companyName: client?.company?.name,
+          clientNotes: clientNotes.trim() || title.trim() || null,
+          lines: validLines.map((l) => ({
+            label: l.label.trim(),
+            amount: l.amount,
+            vat_rate: l.vat_rate,
+            notes: l.notes.trim() || null,
+          })),
+          specLinks: links,
+          isDraft: true,
+        },
+        "Offer_PREVIEW"
+      );
+    } catch (e: any) {
+      setError(e.message || "Could not generate PDF");
+    } finally {
+      setDownloadingPdf(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -177,18 +217,12 @@ export default function NewOfferPage() {
           <div className="grid md:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Client *</Label>
-              <select
-                className="w-full border rounded-md h-10 px-3"
+              <ClientProfileCombobox
+                clients={clients}
                 value={clientId}
-                onChange={(e) => setClientId(e.target.value)}
-              >
-                <option value="">Select client</option>
-                {clients.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.full_name} ({c.email})
-                  </option>
-                ))}
-              </select>
+                onValueChange={setClientId}
+                placeholder="Search by name or email…"
+              />
             </div>
             <div className="space-y-2">
               <Label>Valid until *</Label>
@@ -328,13 +362,27 @@ export default function NewOfferPage() {
 
       {error && <p className="text-red-600 text-sm">{error}</p>}
 
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         <Button onClick={() => saveOffer(false)} disabled={saving}>
           <Save className="h-4 w-4 mr-2" />
           Save draft
         </Button>
-        <Button onClick={() => saveOffer(true)} disabled={saving} variant="default">
-          Save &amp; send to client
+        <Button
+          onClick={() => saveOffer(true)}
+          disabled={saving}
+          variant="default"
+        >
+          <Share2 className="h-4 w-4 mr-2" />
+          Save and share
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={downloadPdf}
+          disabled={downloadingPdf}
+        >
+          <Download className="h-4 w-4 mr-2" />
+          {downloadingPdf ? "Generating…" : "Download PDF"}
         </Button>
       </div>
     </div>
