@@ -9,30 +9,27 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, Save, Share2, Download } from "lucide-react";
+import { Save, Share2, Download } from "lucide-react";
 import {
   ClientProfileCombobox,
   type ClientProfileOption,
 } from "@/components/ClientProfileCombobox";
 import { downloadIndividualOfferPdf } from "@/lib/individual-offer-pdf";
-
-type Line = {
-  line_number: number;
-  label: string;
-  amount: number;
-  vat_rate: number;
-  notes: string;
-};
+import {
+  OfferLinesEditor,
+  emptyOfferLine,
+  type EditableOfferLine,
+} from "@/components/admin/OfferLinesEditor";
+import {
+  offerLinesGrossTotal,
+  offerLinesNetTotal,
+  offerLinesVatTotal,
+} from "@/lib/individual-offer-totals";
+import { formatCurrency } from "@/lib/utils";
 
 type SpecLink = { title: string; url: string };
 
-const emptyLine = (n: number): Line => ({
-  line_number: n,
-  label: "",
-  amount: 0,
-  vat_rate: 23,
-  notes: "",
-});
+const emptyLine = emptyOfferLine;
 
 export default function NewOfferPage() {
   const router = useRouter();
@@ -44,7 +41,7 @@ export default function NewOfferPage() {
   const [clientNotes, setClientNotes] = useState("");
   const [adminNotes, setAdminNotes] = useState("");
   const [paymentLink, setPaymentLink] = useState("");
-  const [lines, setLines] = useState<Line[]>([emptyLine(1)]);
+  const [lines, setLines] = useState<EditableOfferLine[]>([emptyLine(1)]);
   const [specLinks, setSpecLinks] = useState<SpecLink[]>([{ title: "", url: "" }]);
   const [saving, setSaving] = useState(false);
   const [downloadingPdf, setDownloadingPdf] = useState(false);
@@ -75,7 +72,7 @@ export default function NewOfferPage() {
 
     const validLines = lines.filter((l) => l.label.trim() && l.amount > 0);
     if (validLines.length === 0) {
-      setError("Add at least one line with label and amount");
+      setError("Add at least one line with label and net amount");
       return;
     }
 
@@ -176,6 +173,7 @@ export default function NewOfferPage() {
       await downloadIndividualOfferPdf(
         {
           offerNumber: "PREVIEW",
+          versionNumber: 1,
           title: title.trim() || "Individual offer",
           validUntil: validUntil || new Date().toISOString().slice(0, 10),
           clientName: client?.full_name,
@@ -235,6 +233,9 @@ export default function NewOfferPage() {
             <div className="md:col-span-2 space-y-2">
               <Label>Title *</Label>
               <Input value={title} onChange={(e) => setTitle(e.target.value)} />
+              <p className="text-xs text-muted-foreground">
+                Saved as version v1
+              </p>
             </div>
             <div className="md:col-span-2 space-y-2">
               <Label>Payment link (optional)</Label>
@@ -257,69 +258,21 @@ export default function NewOfferPage() {
       </Card>
 
       <Card>
-        <CardHeader className="flex flex-row justify-between">
-          <CardTitle>Summary lines</CardTitle>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() =>
-              setLines([...lines, emptyLine(lines.length + 1)])
-            }
-          >
-            <Plus className="h-4 w-4 mr-1" /> Add line
-          </Button>
+        <CardHeader>
+          <CardTitle>Summary lines (net EUR)</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
-          {lines.map((line, index) => (
-            <div key={line.line_number} className="grid md:grid-cols-4 gap-2">
-              <Input
-                placeholder="Label (e.g. Windows)"
-                value={line.label}
-                onChange={(e) => {
-                  const next = [...lines];
-                  next[index] = { ...line, label: e.target.value };
-                  setLines(next);
-                }}
-              />
-              <Input
-                type="number"
-                step="0.01"
-                placeholder="Amount EUR (gross)"
-                value={line.amount || ""}
-                onChange={(e) => {
-                  const next = [...lines];
-                  next[index] = {
-                    ...line,
-                    amount: parseFloat(e.target.value) || 0,
-                  };
-                  setLines(next);
-                }}
-              />
-              <Input
-                type="number"
-                step="0.01"
-                placeholder="VAT %"
-                value={line.vat_rate}
-                onChange={(e) => {
-                  const next = [...lines];
-                  next[index] = {
-                    ...line,
-                    vat_rate: parseFloat(e.target.value) || 23,
-                  };
-                  setLines(next);
-                }}
-              />
-              <Input
-                placeholder="Notes"
-                value={line.notes}
-                onChange={(e) => {
-                  const next = [...lines];
-                  next[index] = { ...line, notes: e.target.value };
-                  setLines(next);
-                }}
-              />
+          <OfferLinesEditor lines={lines} onChange={setLines} />
+          <div className="text-sm text-right space-y-1 border-t pt-3">
+            <div>
+              Total net:{" "}
+              <strong>{formatCurrency(offerLinesNetTotal(lines), "EUR")}</strong>
             </div>
-          ))}
+            <div className="text-muted-foreground">
+              VAT: {formatCurrency(offerLinesVatTotal(lines), "EUR")} · Gross:{" "}
+              {formatCurrency(offerLinesGrossTotal(lines), "EUR")}
+            </div>
+          </div>
         </CardContent>
       </Card>
 

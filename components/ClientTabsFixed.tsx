@@ -12,6 +12,11 @@ import { EUR_TO_PLN_DIVISOR } from "@/lib/constants";
 import { Plus, Package, MapPin, ShoppingCart, Calendar, Trash2, RotateCcw, Calculator, Layers } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { formatDate, formatCurrency } from "@/lib/utils";
+import {
+  offerLineGrossAmount,
+  offerLineNetAmount,
+  offerLinesNetTotal,
+} from "@/lib/individual-offer-totals";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import SettingsForm from "@/components/SettingsForm";
 
@@ -374,21 +379,18 @@ function ClientTabsFixed({ baskets, orders, tours, myTours = [], userRole }: Cli
                 const expired =
                   offer.version?.valid_until &&
                   new Date(offer.version.valid_until) < new Date(new Date().toDateString());
-                const total = (offer.lines || []).reduce(
-                  (sum: number, line: any) => sum + Number(line.amount),
-                  0
-                );
+                const totalNet = offerLinesNetTotal(offer.lines || []);
                 return (
                   <Card key={offer.id}>
                     <CardHeader>
                       <div className="flex items-start justify-between gap-4">
                         <div>
                           <CardTitle className="text-lg">
-                            {offer.version.title}
+                            {offer.version.title} (v{offer.version.version_number})
                           </CardTitle>
                           <CardDescription>
-                            {offer.offer_number} · v{offer.version.version_number} · Valid
-                            until {formatDate(offer.version.valid_until)}
+                            {offer.offer_number} · Valid until{" "}
+                            {formatDate(offer.version.valid_until)}
                           </CardDescription>
                         </div>
                         <StatusBadge status={offer.version.status} />
@@ -397,14 +399,20 @@ function ClientTabsFixed({ baskets, orders, tours, myTours = [], userRole }: Cli
                     <CardContent className="space-y-4">
                       <div className="text-sm space-y-1">
                         {(offer.lines || []).map((line: any) => (
-                          <div key={line.id} className="flex justify-between">
+                          <div key={line.id} className="flex justify-between gap-4">
                             <span>{line.label}</span>
-                            <span>{formatCurrency(line.amount, "EUR")}</span>
+                            <span className="text-right shrink-0">
+                              <span>{formatCurrency(offerLineNetAmount(line), "EUR")} net</span>
+                              <span className="text-muted-foreground text-xs block">
+                                {formatCurrency(offerLineGrossAmount(line), "EUR")} gross
+                                {Number(line.vat_rate) > 0 ? ` (${line.vat_rate}% VAT)` : ""}
+                              </span>
+                            </span>
                           </div>
                         ))}
                         <div className="flex justify-between font-semibold border-t pt-2">
-                          <span>Total (gross)</span>
-                          <span>{formatCurrency(total, "EUR")}</span>
+                          <span>Total (net)</span>
+                          <span>{formatCurrency(totalNet, "EUR")}</span>
                         </div>
                       </div>
 

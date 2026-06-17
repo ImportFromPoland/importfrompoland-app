@@ -1,5 +1,12 @@
 import React from "react";
 import { Document, Page, Text, View, StyleSheet, Image } from "@react-pdf/renderer";
+import {
+  offerLineGrossAmount,
+  offerLineNetAmount,
+  offerLinesGrossTotal,
+  offerLinesNetTotal,
+  offerLinesVatTotal,
+} from "@/lib/individual-offer-totals";
 
 const styles = StyleSheet.create({
   page: {
@@ -46,17 +53,18 @@ const styles = StyleSheet.create({
     color: "#fff",
     padding: 8,
     fontWeight: "bold",
-    fontSize: 9,
+    fontSize: 8,
   },
   tableRow: {
     flexDirection: "row",
     borderBottom: "1pt solid #eee",
     padding: 8,
-    fontSize: 9,
+    fontSize: 8,
   },
-  colLabel: { width: "55%" },
-  colAmount: { width: "25%", textAlign: "right" },
-  colVat: { width: "20%", textAlign: "right" },
+  colLabel: { width: "40%" },
+  colNet: { width: "18%", textAlign: "right" },
+  colVat: { width: "12%", textAlign: "right" },
+  colGross: { width: "18%", textAlign: "right" },
   notesBox: {
     backgroundColor: "#f9f9f9",
     padding: 10,
@@ -67,12 +75,19 @@ const styles = StyleSheet.create({
   totalRow: {
     flexDirection: "row",
     justifyContent: "flex-end",
-    marginTop: 12,
+    marginTop: 4,
+    fontSize: 9,
+  },
+  totalLabel: { fontWeight: "bold", marginRight: 8 },
+  grandTotal: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    marginTop: 8,
     paddingTop: 8,
     borderTop: "2pt solid #E94444",
+    fontSize: 11,
+    fontWeight: "bold",
   },
-  totalLabel: { fontSize: 12, fontWeight: "bold", marginRight: 12 },
-  totalValue: { fontSize: 12, fontWeight: "bold", color: "#E94444" },
   draftBadge: {
     fontSize: 9,
     color: "#888",
@@ -136,7 +151,10 @@ export const IndividualOfferPDF: React.FC<IndividualOfferPDFProps> = ({
   specLinks = [],
   isDraft,
 }) => {
-  const totalGross = lines.reduce((sum, line) => sum + Number(line.amount), 0);
+  const totalNet = offerLinesNetTotal(lines);
+  const totalVat = offerLinesVatTotal(lines);
+  const totalGross = offerLinesGrossTotal(lines);
+  const displayTitle = versionNumber ? `${title} (v${versionNumber})` : title;
 
   return (
     <Document>
@@ -171,14 +189,11 @@ export const IndividualOfferPDF: React.FC<IndividualOfferPDFProps> = ({
           <Text style={styles.sectionTitle}>Offer details</Text>
           <View style={styles.row}>
             <Text style={styles.label}>Offer number:</Text>
-            <Text style={styles.value}>
-              {offerNumber}
-              {versionNumber ? ` (v${versionNumber})` : ""}
-            </Text>
+            <Text style={styles.value}>{offerNumber}</Text>
           </View>
           <View style={styles.row}>
             <Text style={styles.label}>Title:</Text>
-            <Text style={styles.value}>{title || "—"}</Text>
+            <Text style={styles.value}>{displayTitle || "—"}</Text>
           </View>
           <View style={styles.row}>
             <Text style={styles.label}>Valid until:</Text>
@@ -214,17 +229,19 @@ export const IndividualOfferPDF: React.FC<IndividualOfferPDFProps> = ({
         ) : null}
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Summary</Text>
+          <Text style={styles.sectionTitle}>Summary (amounts net unless stated)</Text>
           <View style={styles.tableHeader}>
             <Text style={styles.colLabel}>Description</Text>
-            <Text style={styles.colAmount}>Amount (EUR gross)</Text>
+            <Text style={styles.colNet}>Net EUR</Text>
             <Text style={styles.colVat}>VAT %</Text>
+            <Text style={styles.colGross}>Gross EUR</Text>
           </View>
           {lines.length === 0 ? (
             <View style={styles.tableRow}>
               <Text style={styles.colLabel}>—</Text>
-              <Text style={styles.colAmount}>—</Text>
+              <Text style={styles.colNet}>—</Text>
               <Text style={styles.colVat}>—</Text>
+              <Text style={styles.colGross}>—</Text>
             </View>
           ) : (
             lines.map((line, index) => (
@@ -233,16 +250,27 @@ export const IndividualOfferPDF: React.FC<IndividualOfferPDFProps> = ({
                   {line.label}
                   {line.notes ? `\n${line.notes}` : ""}
                 </Text>
-                <Text style={styles.colAmount}>
-                  {formatCurrency(Number(line.amount))}
+                <Text style={styles.colNet}>
+                  {formatCurrency(offerLineNetAmount(line))}
                 </Text>
                 <Text style={styles.colVat}>{line.vat_rate}%</Text>
+                <Text style={styles.colGross}>
+                  {formatCurrency(offerLineGrossAmount(line))}
+                </Text>
               </View>
             ))
           )}
           <View style={styles.totalRow}>
+            <Text style={styles.totalLabel}>Total net:</Text>
+            <Text>{formatCurrency(totalNet)}</Text>
+          </View>
+          <View style={styles.totalRow}>
+            <Text style={styles.totalLabel}>Total VAT:</Text>
+            <Text>{formatCurrency(totalVat)}</Text>
+          </View>
+          <View style={styles.grandTotal}>
             <Text style={styles.totalLabel}>Total gross:</Text>
-            <Text style={styles.totalValue}>{formatCurrency(totalGross)}</Text>
+            <Text style={{ color: "#E94444" }}>{formatCurrency(totalGross)}</Text>
           </View>
         </View>
 
