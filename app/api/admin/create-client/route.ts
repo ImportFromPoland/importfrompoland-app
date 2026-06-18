@@ -58,17 +58,14 @@ export async function POST(request: Request) {
 
     const admin = createAdminClient();
 
-    const { data: existingAuth, error: lookupError } =
-      await admin.auth.admin.getUserByEmail(email);
-    if (lookupError) {
-      const notFound =
-        lookupError.status === 404 ||
-        /not found/i.test(lookupError.message || "");
-      if (!notFound) {
-        return NextResponse.json({ error: lookupError.message }, { status: 400 });
-      }
-    }
-    if (existingAuth?.user) {
+    const { data: existingProfile } = await admin
+      .from("profiles")
+      .select("id")
+      .eq("email", email)
+      .is("gdpr_erased_at", null)
+      .maybeSingle();
+
+    if (existingProfile) {
       return NextResponse.json(
         {
           error:
@@ -85,7 +82,17 @@ export async function POST(request: Request) {
     });
 
     if (authError) {
-      return NextResponse.json({ error: authError.message }, { status: 400 });
+      const msg = authError.message || "";
+      if (/already|registered|exists/i.test(msg)) {
+        return NextResponse.json(
+          {
+            error:
+              "A user with this email already exists. They can sign in via Forgot password, or find them in the user list.",
+          },
+          { status: 400 }
+        );
+      }
+      return NextResponse.json({ error: msg }, { status: 400 });
     }
 
     const userId = authUser.user.id;
