@@ -58,6 +58,26 @@ export async function POST(request: Request) {
 
     const admin = createAdminClient();
 
+    const { data: existingAuth, error: lookupError } =
+      await admin.auth.admin.getUserByEmail(email);
+    if (lookupError) {
+      const notFound =
+        lookupError.status === 404 ||
+        /not found/i.test(lookupError.message || "");
+      if (!notFound) {
+        return NextResponse.json({ error: lookupError.message }, { status: 400 });
+      }
+    }
+    if (existingAuth?.user) {
+      return NextResponse.json(
+        {
+          error:
+            "A user with this email already exists. They can sign in via Forgot password, or find them in the user list.",
+        },
+        { status: 400 }
+      );
+    }
+
     const { data: authUser, error: authError } = await admin.auth.admin.createUser({
       email,
       email_confirm: true,
@@ -85,15 +105,22 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: companyError.message }, { status: 400 });
     }
 
-    const { error: profileError } = await admin.from("profiles").insert({
+    const profilePayload = {
       id: userId,
       email,
       full_name: fullName,
       phone: phone || null,
       email_is_placeholder: emailIsPlaceholder,
-      role: "client",
+      role: "client" as const,
       company_id: company.id,
-    });
+      gdpr_erased_at: null,
+      deleted_at: null,
+    };
+
+    // Auth hook may auto-insert a bare profile row — upsert avoids profiles_pkey conflict.
+    const { error: profileError } = await admin
+      .from("profiles")
+      .upsert(profilePayload, { onConflict: "id" });
 
     if (profileError) {
       await admin.from("companies").delete().eq("id", company.id);
