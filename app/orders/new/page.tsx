@@ -16,6 +16,12 @@ import { Plus, Save, Send, Table2, LayoutGrid, Trash2 } from "lucide-react";
 import { PLN_TO_EUR_RATE, DEFAULT_VAT_RATE } from "@/lib/constants";
 import { formatCurrency } from "@/lib/utils";
 import { Logo } from "@/components/Logo";
+import {
+  ScreenshotLineCapture,
+  applyScreenshotPayload,
+  createLineFromScreenshot,
+  type ScreenshotApplyPayload,
+} from "@/components/ScreenshotLineCapture";
 
 export default function NewOrderPage() {
   const router = useRouter();
@@ -105,6 +111,21 @@ export default function NewOrderPage() {
     const newLines = [...lines];
     newLines[index] = updatedLine;
     setLines(newLines);
+  };
+
+  const applyScreenshotToBasket = (payload: ScreenshotApplyPayload) => {
+    const emptyIndex = lines.findIndex(
+      (line) => !line.product_name.trim() && line.unit_price <= 0 && !line.attachment_url
+    );
+
+    if (emptyIndex >= 0) {
+      updateLine(emptyIndex, applyScreenshotPayload(lines[emptyIndex], payload));
+      return;
+    }
+
+    const maxLineNumber =
+      lines.length > 0 ? Math.max(...lines.map((line) => line.line_number)) : 0;
+    setLines([...lines, createLineFromScreenshot(maxLineNumber + 1, payload)]);
   };
 
   const totals = useMemo(() => {
@@ -369,7 +390,13 @@ export default function NewOrderPage() {
                   </Button>
                 </div>
               </CardHeader>
-              <CardContent>
+              <CardContent className="space-y-4">
+                <ScreenshotLineCapture
+                  variant="banner"
+                  enableGlobalPaste
+                  onApply={applyScreenshotToBasket}
+                />
+
                 {viewMode === "classic" ? (
                   <div className="space-y-4">
                     {lines.map((line, index) => (

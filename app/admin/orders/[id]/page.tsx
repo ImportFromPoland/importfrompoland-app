@@ -30,6 +30,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { AttachmentImageLink } from "@/components/AttachmentImageLink";
 
 export default function AdminOrderDetailPage() {
   const router = useRouter();
@@ -539,7 +540,7 @@ export default function AdminOrderDetailPage() {
     order.status
   );
   const showLineRabat = isStaffAdmin && order.status !== "draft";
-  const itemTableColSpan = 10 + (showLineRabat ? 1 : 0) + (hasCostCols ? 4 : 0);
+  const itemTableColSpan = 11 + (showLineRabat ? 1 : 0) + (hasCostCols ? 4 : 0);
 
   return (
     <div className="space-y-6">
@@ -644,6 +645,7 @@ export default function AdminOrderDetailPage() {
                       <TableHead>Qty</TableHead>
                       <TableHead>Unit</TableHead>
                       <TableHead>Notes</TableHead>
+                      <TableHead className="text-center w-[72px]">Shot</TableHead>
                       {showLineRabat && (
                         <TableHead className="text-right w-[88px]">Discount %</TableHead>
                       )}
@@ -794,6 +796,16 @@ export default function AdminOrderDetailPage() {
                               <div className="min-w-[150px] text-sm">
                                 {item.notes || "-"}
                               </div>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-center">
+                            {item.attachment_url ? (
+                              <AttachmentImageLink
+                                attachmentUrl={item.attachment_url}
+                                thumbnail
+                              />
+                            ) : (
+                              <span className="text-muted-foreground text-xs">-</span>
                             )}
                           </TableCell>
                           {showLineRabat && (

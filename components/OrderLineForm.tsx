@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { SupplierCombobox } from "@/components/SupplierCombobox";
+import { ScreenshotLineCapture, applyScreenshotPayload } from "@/components/ScreenshotLineCapture";
 import { Trash2 } from "lucide-react";
 import { PLN_TO_EUR_RATE, EUR_TO_PLN_DIVISOR } from "@/lib/constants";
 import { formatCurrency } from "@/lib/utils";
@@ -56,6 +57,15 @@ export function OrderLineForm({ line, onUpdate, onRemove, orderCurrency, vatRate
           <Trash2 className="h-4 w-4 text-red-600" />
         </Button>
       </div>
+
+      {!hideUpload && (
+        <ScreenshotLineCapture
+          variant="inline"
+          existingAttachmentUrl={line.attachment_url}
+          onClearAttachment={() => onUpdate({ ...line, attachment_url: undefined })}
+          onApply={(payload) => onUpdate(applyScreenshotPayload(line, payload))}
+        />
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="space-y-2">

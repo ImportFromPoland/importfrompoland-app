@@ -9,6 +9,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { type OrderLineData } from "@/components/OrderLineForm";
+import {
+  ScreenshotLineCapture,
+  applyScreenshotPayload,
+  createLineFromScreenshot,
+  type ScreenshotApplyPayload,
+} from "@/components/ScreenshotLineCapture";
 import { Logo } from "@/components/Logo";
 import { SupplierCombobox } from "@/components/SupplierCombobox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -150,6 +156,21 @@ export default function EditOrderPage() {
     const newLines = [...lines];
     newLines[index] = updatedLine;
     setLines(newLines);
+  };
+
+  const applyScreenshotToBasket = (payload: ScreenshotApplyPayload) => {
+    const emptyIndex = lines.findIndex(
+      (line) => !line.product_name.trim() && line.unit_price <= 0 && !line.attachment_url
+    );
+
+    if (emptyIndex >= 0) {
+      updateLine(emptyIndex, applyScreenshotPayload(lines[emptyIndex], payload));
+      return;
+    }
+
+    const maxLineNumber =
+      lines.length > 0 ? Math.max(...lines.map((line) => line.line_number || 0)) : 0;
+    setLines([...lines, createLineFromScreenshot(maxLineNumber + 1, payload)]);
   };
 
   const totals = useMemo(() => {
@@ -335,6 +356,13 @@ export default function EditOrderPage() {
             <CardHeader>
               <CardTitle>Order Items</CardTitle>
             </CardHeader>
+            <div className="px-6 pb-4">
+              <ScreenshotLineCapture
+                variant="banner"
+                enableGlobalPaste
+                onApply={applyScreenshotToBasket}
+              />
+            </div>
             <CardContent className="p-0">
               <div className="overflow-x-auto">
                 <table className="w-full">
