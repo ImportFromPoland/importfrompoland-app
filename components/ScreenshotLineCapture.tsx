@@ -116,9 +116,16 @@ export function ScreenshotLineCapture({
         }
 
         onApply(payload);
+        const parts: string[] = [];
+        if (parsed.unit_price !== null) {
+          parts.push(`price ${parsed.unit_price.toFixed(2)} PLN`);
+        }
+        if (parsed.website_url) {
+          parts.push("link detected");
+        }
         setStatus(
-          parsed.unit_price !== null
-            ? `Added — detected price ${parsed.unit_price.toFixed(2)} PLN. Check fields and add your product description.`
+          parts.length > 0
+            ? `Added — detected ${parts.join(" and ")}. Check fields and add product name if needed.`
             : "Added — please enter price and product name; admin will verify from screenshot."
         );
       } catch (error: unknown) {

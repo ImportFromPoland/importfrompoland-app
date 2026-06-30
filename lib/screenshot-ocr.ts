@@ -14,9 +14,22 @@ const PRICE_PATTERNS = [
   /(\d{1,3}(?:[\s\u00a0]\d{3})*(?:[.,]\d{1,2})?)\s*(?:zł|zl|PLN|pln)\b/gi,
   /(?:zł|zl|PLN|pln)\s*(\d{1,3}(?:[\s\u00a0]\d{3})*(?:[.,]\d{1,2})?)/gi,
   /(\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{2}))\s*(?:zł|zl)/gi,
+  /cena[:\s]*(\d{1,3}(?:[\s\u00a0]\d{3})*(?:[.,]\d{1,2})?)/gi,
 ];
 
-const URL_PATTERN = /https?:\/\/[^\s<>"')\]]+/gi;
+const URL_BAR_MARKER = "__URL_BAR__";
+const BODY_MARKER = "__BODY__";
+
+const BLOCKED_HOSTS = [
+  "google.",
+  "facebook.",
+  "gstatic.",
+  "chrome.",
+  "mozilla.",
+  "apple.com",
+  "microsoft.com",
+  "bing.com",
+];
 
 function parsePolishPrice(raw: string): number | null {
   const normalized = raw
@@ -86,34 +99,111 @@ function pickBestPrice(prices: number[], text: string): { price: number | null; 
   return { price: chosen, confidence: "low" };
 }
 
-function cleanUrl(raw: string): string {
-  return raw.replace(/[.,;)\]]+$/, "").trim();
+/** Fix common OCR breaks inside URLs (spaces, split protocol). */
+function deOcrUrlChunk(raw: string): string {
+  return raw
+    .replace(/\u00a0/g, " ")
+    .replace(/[|]/g, "l")
+    .replace(/h\s*t\s*t\s*p\s*s?\s*:\s*\/\s*\/\s*/gi, "https://")
+    .replace(/http\s*:\s*\/\s*\/\s*/gi, "http://")
+    .replace(/\s+/g, "");
+}
+
+function isBlockedHost(hostname: string): boolean {
+  const lower = hostname.toLowerCase();
+  return BLOCKED_HOSTS.some((h) => lower.includes(h));
+}
+
+function tryParseUrl(candidate: string): URL | null {
+  const cleaned = deOcrUrlChunk(candidate).replace(/[.,;)\]'"]+$/, "");
+  if (!cleaned || cleaned.length < 8) return null;
+
+  const attempts = [
+    cleaned,
+    cleaned.startsWith("http") ? cleaned : `https://${cleaned}`,
+    cleaned.replace(/^https?:\/\//i, "https://www."),
+  ];
+
+  for (const attempt of attempts) {
+    try {
+      const url = new URL(attempt);
+      if (!url.hostname.includes(".")) continue;
+      if (isBlockedHost(url.hostname)) continue;
+      return url;
+    } catch {
+      continue;
+    }
+  }
+  return null;
+}
+
+function scoreUrl(url: URL, fromUrlBar: boolean): number {
+  let score = url.href.length;
+  if (fromUrlBar) score += 500;
+  if (url.pathname.length > 1) score += 100;
+  if (url.hostname.endsWith(".pl")) score += 50;
+  if (url.hostname.startsWith("www.")) score += 20;
+  return score;
+}
+
+function collectUrlCandidates(text: string): Array<{ url: URL; fromUrlBar: boolean }> {
+  const results: Array<{ url: URL; fromUrlBar: boolean }> = [];
+  const seen = new Set<string>();
+
+  const addFromChunk = (chunk: string, fromUrlBar: boolean) => {
+    const patterns = [
+      /https?:\/\/[\w./%?\-\s=&+#:]+/gi,
+      /(?:www\.)?[a-z0-9][\w.\-]*\.(?:pl|com|eu|net|org|shop)(?:\/[\w./%?\-\s=&+#:]*)?/gi,
+    ];
+
+    for (const pattern of patterns) {
+      const regex = new RegExp(pattern.source, pattern.flags);
+      let match: RegExpExecArray | null;
+      while ((match = regex.exec(chunk)) !== null) {
+        const parsed = tryParseUrl(match[0]);
+        if (!parsed) continue;
+        const key = parsed.href.toLowerCase();
+        if (seen.has(key)) continue;
+        seen.add(key);
+        results.push({ url: parsed, fromUrlBar });
+      }
+    }
+  };
+
+  const urlBarIdx = text.indexOf(URL_BAR_MARKER);
+  const bodyIdx = text.indexOf(BODY_MARKER);
+
+  if (urlBarIdx >= 0 && bodyIdx > urlBarIdx) {
+    addFromChunk(text.slice(urlBarIdx + URL_BAR_MARKER.length, bodyIdx), true);
+    addFromChunk(text.slice(bodyIdx + BODY_MARKER.length), false);
+  } else {
+    addFromChunk(text, false);
+  }
+
+  return results;
 }
 
 function extractUrl(text: string): { url: string; confidence: OcrConfidence } {
-  const matches = text.match(URL_PATTERN);
-  if (!matches?.length) {
+  const candidates = collectUrlCandidates(text);
+  if (candidates.length === 0) {
     return { url: "", confidence: "none" };
   }
 
-  const cleaned = matches.map(cleanUrl);
-  const productLike = cleaned.find(
-    (u) =>
-      !u.includes("google.") &&
-      !u.includes("facebook.") &&
-      !u.includes("gstatic.") &&
-      u.length > 12
+  candidates.sort(
+    (a, b) => scoreUrl(b.url, b.fromUrlBar) - scoreUrl(a.url, a.fromUrlBar)
   );
 
-  const url = productLike || cleaned[0];
-  try {
-    new URL(url);
-    const confidence: OcrConfidence =
-      matches.length === 1 && url.includes("www.") ? "high" : "low";
-    return { url, confidence };
-  } catch {
-    return { url: "", confidence: "none" };
+  const best = candidates[0];
+  const href = best.url.href;
+
+  let confidence: OcrConfidence = "low";
+  if (best.fromUrlBar && best.url.pathname.length > 1) {
+    confidence = "high";
+  } else if (candidates.length === 1 && href.length > 20) {
+    confidence = "high";
   }
+
+  return { url: href, confidence };
 }
 
 function supplierFromUrl(url: string): string {
@@ -128,17 +218,29 @@ function supplierFromUrl(url: string): string {
   }
 }
 
-function extractProductName(text: string, url: string, prices: number[]): string {
-  const lines = text
+function isBreadcrumb(line: string): boolean {
+  if (line.includes(">")) return true;
+  if (/strona\s+główna|strona glowna|produkty|products|home\s*[/\\]/i.test(line)) {
+    return true;
+  }
+  return false;
+}
+
+function extractProductName(text: string): string {
+  const bodyIdx = text.indexOf(BODY_MARKER);
+  const body = bodyIdx >= 0 ? text.slice(bodyIdx + BODY_MARKER.length) : text;
+
+  const lines = body
     .split(/\n+/)
     .map((l) => l.trim())
     .filter(Boolean);
 
   const candidates = lines.filter((line) => {
     if (line.length < 8 || line.length > 200) return false;
-    if (URL_PATTERN.test(line)) return false;
+    if (isBreadcrumb(line)) return false;
+    if (/https?:\/\//i.test(line)) return false;
     if (/(?:zł|zl|pln)\b/i.test(line) && /\d/.test(line)) return false;
-    if (/^(koszyk|cart|menu|szukaj|search|zaloguj|login)/i.test(line)) return false;
+    if (/^(koszyk|cart|menu|szukaj|search|zaloguj|login|dodaj do)/i.test(line)) return false;
     return /[a-zA-ZąćęłńóśźżĄĆĘŁŃÓŚŹŻ]{4,}/.test(line);
   });
 
@@ -154,7 +256,7 @@ export function parseOcrText(text: string): OcrParseResult {
   const { price, confidence: price_confidence } = pickBestPrice(prices, normalized);
   const { url, confidence: url_confidence } = extractUrl(normalized);
   const supplier_name = supplierFromUrl(url);
-  const product_name = extractProductName(normalized, url, prices);
+  const product_name = extractProductName(normalized);
 
   return {
     unit_price: price,
@@ -196,6 +298,28 @@ export function appendScreenshotNotes(existing: string, reviewNotes: string): st
   return `${trimmed} ${reviewNotes}`;
 }
 
+async function cropTopRegion(file: Blob, heightRatio = 0.14): Promise<Blob | null> {
+  if (typeof document === "undefined") return null;
+
+  try {
+    const bitmap = await createImageBitmap(file);
+    const cropH = Math.max(48, Math.floor(bitmap.height * heightRatio));
+    const canvas = document.createElement("canvas");
+    canvas.width = bitmap.width;
+    canvas.height = cropH;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return null;
+    ctx.drawImage(bitmap, 0, 0, bitmap.width, cropH, 0, 0, bitmap.width, cropH);
+    bitmap.close();
+
+    return new Promise((resolve) => {
+      canvas.toBlob((blob) => resolve(blob), "image/png");
+    });
+  } catch {
+    return null;
+  }
+}
+
 export async function recognizeImageText(file: Blob): Promise<string> {
   const { createWorker } = await import("tesseract.js");
   const worker = await createWorker("pol+eng", 1, {
@@ -203,10 +327,21 @@ export async function recognizeImageText(file: Blob): Promise<string> {
   });
 
   try {
+    const topCrop = await cropTopRegion(file);
+    let topText = "";
+
+    if (topCrop) {
+      const {
+        data: { text },
+      } = await worker.recognize(topCrop);
+      topText = text || "";
+    }
+
     const {
-      data: { text },
+      data: { text: fullText },
     } = await worker.recognize(file);
-    return text || "";
+
+    return `${URL_BAR_MARKER}\n${topText}\n${BODY_MARKER}\n${fullText || ""}`;
   } finally {
     await worker.terminate();
   }
