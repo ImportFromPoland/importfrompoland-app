@@ -49,54 +49,194 @@ function parsePolishPrice(raw: string): number | null {
 interface ScoredPrice {
   price: number;
   score: number;
+  unitType: "unit" | "unknown";
+  lineIndex: number;
+}
+
+type PriceUnitKind = "unit" | "m2" | "kg" | "netto" | "unknown";
+
+function parsePriceGroups(g1: string, g2?: string): number | null {
+  if (g2 !== undefined) {
+    return parsePolishPrice(`${g1}.${g2}`);
+  }
+  return parsePolishPrice(g1);
+}
+
+function classifyUnitKind(context: string, nextLine = "", prevLine = ""): PriceUnitKind {
+  const combined = `${prevLine}\n${context}\n${nextLine}`.toLowerCase();
+
+  if (
+    /m²|m2|m\^2|brutto\s*\/\s*m\b|\/\s*m²|\/\s*m2|za\s+m²|za\s+m2|metr\s*kw|\/\s*m\b(?!\w)|cena\s+za\s+m/i.test(
+      combined
+    )
+  ) {
+    return "m2";
+  }
+  if (/kg|kilogram|brutto\s*\/\s*kg|\/\s*kg\b|za\s+kg/i.test(combined)) {
+    return "kg";
+  }
+  if (
+    /brutto\s*\/\s*szt|\/\s*szt\.?|\bszt\.?\b|za\s*szt|na\s*sztuk|1\s*szt|jednostkow/i.test(
+      combined
+    )
+  ) {
+    return "unit";
+  }
+  if (/netto/.test(combined) && !/brutto/.test(combined)) {
+    return "netto";
+  }
+  return "unknown";
+}
+
+function extractPriceFromLine(line: string): number | null {
+  const patterns: Array<RegExp> = [
+    /(\d{1,4}[.,]\d{2})\s*(?:zł|zl|z[łl1t]|PLN)\b/i,
+    /(?:zł|zl|PLN)\s*(\d{1,4}[.,]\d{2})/i,
+    /^(\d{1,3})\s+(\d{2})\s*(?:zł|zl|z)?\s*$/i,
+    /^(\d{1,4}[.,]\d{2})\s*$/,
+    /(\d{1,4}[.,]\d{2})\s*(?:zł|zl|z[łl1t])/i,
+    /cena[:\s]*(\d{1,4}[.,]\d{2})/i,
+  ];
+
+  for (const pattern of patterns) {
+    const match = line.match(pattern);
+    if (!match) continue;
+    const price =
+      match[2] !== undefined && /^\d{2}$/.test(match[2])
+        ? parsePriceGroups(match[1], match[2])
+        : parsePolishPrice(match[1]);
+    if (price !== null && price >= 0.01 && price <= 50000) {
+      return price;
+    }
+  }
+  return null;
+}
+
+/** Line-aware extraction — handles "37,99 zł" followed by "brutto / szt." on the next line. */
+function extractPricesFromLines(source: string, regionBonus = 0): ScoredPrice[] {
+  const lines = source.split(/\n/).map((l) => l.trim());
+  const results: ScoredPrice[] = [];
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (!line) continue;
+
+    const price = extractPriceFromLine(line);
+    if (price === null) continue;
+
+    const prev = lines[i - 1] || "";
+    const next = lines[i + 1] || "";
+    const next2 = lines[i + 2] || "";
+    const unitKind = classifyUnitKind(line, `${next}\n${next2}`, prev);
+
+    if (unitKind === "m2" || unitKind === "kg" || unitKind === "netto") {
+      continue;
+    }
+
+    let score = 20 + regionBonus;
+    let unitType: ScoredPrice["unitType"] = "unknown";
+
+    if (unitKind === "unit") {
+      score = 250 + regionBonus;
+      unitType = "unit";
+    } else if (/brutto/i.test(next) && !/m²|m2|\/\s*m/i.test(next)) {
+      score = 180 + regionBonus;
+      unitType = "unit";
+    } else if (/^(?:zł|zl|pln|\d)/i.test(line) && /szt/i.test(`${next} ${next2}`)) {
+      score = 200 + regionBonus;
+      unitType = "unit";
+    } else if (line.match(/zł|zl|z[łl1t]|PLN/i)) {
+      score = 60 + regionBonus;
+    }
+
+    if (/cena\s+poprzednia|było|przecena|stara\s+cena|~~|-\s*\d/i.test(`${prev} ${line}`)) {
+      score -= 80;
+    }
+
+    results.push({ price, score, unitType, lineIndex: i });
+  }
+
+  return results;
+}
+
+function extractPricesWithRegex(source: string, regionBonus = 0): ScoredPrice[] {
+  const results: ScoredPrice[] = [];
+  const patterns: Array<{ re: RegExp; bonus: number }> = [
+    { re: /(\d{1,4}[.,]\d{2})\s*(?:zł|zl|z[łl1t]|PLN)\s*brutto\s*\/\s*szt/gi, bonus: 120 },
+    { re: /(\d{1,4}[.,]\d{2})\s*(?:zł|zl|z[łl1t]|PLN)\s*\/\s*szt/gi, bonus: 110 },
+    { re: /brutto\s*\/\s*szt[^0-9]{0,25}(\d{1,4}[.,]\d{2})/gi, bonus: 100 },
+    { re: /(\d{1,3})\s+(\d{2})\s*(?:zł|zl|z[łl1t])/gi, bonus: 70 },
+    { re: /(\d{1,4}[.,]\d{2})\s*(?:zł|zl|z[łl1t]|PLN)\b/gi, bonus: 30 },
+    { re: /(?:zł|zl|PLN)\s*(\d{1,4}[.,]\d{2})/gi, bonus: 25 },
+  ];
+
+  for (const { re, bonus } of patterns) {
+    const regex = new RegExp(re.source, re.flags);
+    let match: RegExpExecArray | null;
+    while ((match = regex.exec(source)) !== null) {
+      const price =
+        match[2] !== undefined && /^\d{2}$/.test(match[2])
+          ? parsePriceGroups(match[1], match[2])
+          : parsePolishPrice(match[1]);
+      if (price === null) continue;
+
+      const after = source.slice(match.index, match.index + match[0].length + 100);
+      const before = source.slice(Math.max(0, match.index - 40), match.index);
+      const nextLineStart = source.indexOf("\n", match.index + match[0].length);
+      const nextLine =
+        nextLineStart >= 0
+          ? source.slice(nextLineStart + 1, nextLineStart + 80).split("\n")[0] || ""
+          : "";
+
+      const unitKind = classifyUnitKind(`${before}${match[0]}${after}`, nextLine);
+      if (unitKind === "m2" || unitKind === "kg") continue;
+      if (unitKind === "netto" && !/brutto/.test(after)) continue;
+
+      let score = 10 + bonus + regionBonus;
+      let unitType: ScoredPrice["unitType"] = "unknown";
+      if (unitKind === "unit") {
+        score += 150;
+        unitType = "unit";
+      }
+
+      results.push({ price, score, unitType, lineIndex: match.index });
+    }
+  }
+
+  return results;
 }
 
 function extractScoredPrices(text: string): ScoredPrice[] {
-  const results: ScoredPrice[] = [];
   const bodyIdx = text.indexOf(BODY_MARKER);
   const body = bodyIdx >= 0 ? text.slice(bodyIdx + BODY_MARKER.length) : text;
   const priceRegionEnd = body.indexOf("__PRICE_REGION_END__");
   const priceRegion = priceRegionEnd >= 0 ? body.slice(0, priceRegionEnd) : "";
   const mainBody = priceRegionEnd >= 0 ? body.slice(priceRegionEnd + "__PRICE_REGION_END__".length) : body;
 
-  const patterns = [
-    /(\d{1,4}[.,]\d{2})\s*(?:zł|zl|z[łl1t]|PLN)\s*brutto\s*\/\s*szt/gi,
-    /(\d{1,4}[.,]\d{2})\s*(?:zł|zl|z[łl1t]|PLN)\s*brutto/gi,
-    /brutto\s*\/\s*szt[^0-9]{0,20}(\d{1,4}[.,]\d{2})/gi,
-    /(\d{1,4}[.,]\d{2})\s*(?:zł|zl|z[łl1t]|PLN)\b/gi,
-    /(?:zł|zl|PLN)\s*(\d{1,4}[.,]\d{2})/gi,
-    /cena[:\s]*(\d{1,4}[.,]\d{2})/gi,
+  const fromPriceRegion = priceRegion.trim()
+    ? [
+        ...extractPricesFromLines(priceRegion, 80),
+        ...extractPricesWithRegex(priceRegion, 80),
+      ]
+    : [];
+
+  const fromMain = [
+    ...extractPricesFromLines(mainBody, 0),
+    ...extractPricesWithRegex(mainBody, 0),
   ];
 
-  const searchIn = (source: string, regionBonus: number) => {
-    for (const pattern of patterns) {
-      const regex = new RegExp(pattern.source, pattern.flags);
-      let match: RegExpExecArray | null;
-      while ((match = regex.exec(source)) !== null) {
-        const price = parsePolishPrice(match[1]);
-        if (price === null) continue;
+  const all = [...fromPriceRegion, ...fromMain];
 
-        const start = Math.max(0, match.index - 30);
-        const end = Math.min(source.length, match.index + match[0].length + 40);
-        const context = source.slice(start, end).toLowerCase();
-
-        let score = 10 + regionBonus;
-        if (/brutto/.test(context)) score += 80;
-        if (/\/\s*szt|brutto\s*\/\s*szt|\/szt/.test(context)) score += 100;
-        if (/\bszt\b/.test(context)) score += 40;
-        if (/m²|m2|\/\s*m|metr kwadrat|za m/.test(context)) score -= 120;
-        if (/netto/.test(context) && !/brutto/.test(context)) score -= 60;
-        if (pattern.source.includes("brutto")) score += 30;
-
-        results.push({ price, score });
-      }
+  const deduped = new Map<number, ScoredPrice>();
+  for (const item of all) {
+    const key = item.price;
+    const existing = deduped.get(key);
+    if (!existing || item.score > existing.score) {
+      deduped.set(key, item);
     }
-  };
+  }
 
-  if (priceRegion.trim()) searchIn(priceRegion, 150);
-  searchIn(mainBody, 0);
-
-  return results;
+  return [...deduped.values()];
 }
 
 function pickBestPrice(scored: ScoredPrice[]): { price: number | null; confidence: OcrConfidence } {
@@ -104,21 +244,28 @@ function pickBestPrice(scored: ScoredPrice[]): { price: number | null; confidenc
     return { price: null, confidence: "none" };
   }
 
-  scored.sort((a, b) => b.score - a.score);
-  const best = scored[0];
-  const tied = scored.filter((s) => s.score === best.score);
+  const unitPrices = scored.filter((s) => s.unitType === "unit");
+  if (unitPrices.length > 0) {
+    unitPrices.sort((a, b) => b.score - a.score || a.lineIndex - b.lineIndex);
+    const best = unitPrices[0];
+    return {
+      price: best.price,
+      confidence: best.score >= 150 ? "high" : "low",
+    };
+  }
 
-  if (best.score >= 100) {
-    return { price: best.price, confidence: "high" };
-  }
-  if (best.score >= 50 && tied.length === 1) {
-    return { price: best.price, confidence: "high" };
-  }
-  if (best.score >= 20) {
+  scored.sort((a, b) => b.score - a.score || a.lineIndex - b.lineIndex);
+  const best = scored[0];
+
+  if (best.score >= 80) {
     return { price: best.price, confidence: "low" };
   }
 
-  return { price: best.price, confidence: "low" };
+  if (best.score >= 40) {
+    return { price: best.price, confidence: "low" };
+  }
+
+  return { price: null, confidence: "none" };
 }
 
 function deOcrUrlChunk(raw: string): string {
@@ -338,6 +485,7 @@ function supplierFromUrl(url: string): string {
     const part = host.split(".")[0];
     if (!part || part.length < 2) return "";
     if (part.toLowerCase() === "leroymerlin") return "Leroy Merlin";
+    if (part.toLowerCase() === "lidl") return "Lidl";
     return part.charAt(0).toUpperCase() + part.slice(1).toLowerCase();
   } catch {
     return "";
@@ -464,15 +612,21 @@ async function cropTopRegion(file: Blob, heightRatio = 0.1): Promise<Blob | null
   }
 }
 
-async function cropPriceRegion(file: Blob): Promise<Blob | null> {
+async function cropRegion(
+  file: Blob,
+  xRatio: number,
+  yRatio: number,
+  wRatio: number,
+  hRatio: number
+): Promise<Blob | null> {
   if (typeof document === "undefined") return null;
 
   try {
     const bitmap = await createImageBitmap(file);
-    const x = Math.floor(bitmap.width * 0.52);
-    const y = Math.floor(bitmap.height * 0.22);
-    const w = Math.floor(bitmap.width * 0.45);
-    const h = Math.floor(bitmap.height * 0.22);
+    const x = Math.floor(bitmap.width * xRatio);
+    const y = Math.floor(bitmap.height * yRatio);
+    const w = Math.max(1, Math.floor(bitmap.width * wRatio));
+    const h = Math.max(1, Math.floor(bitmap.height * hRatio));
     const canvas = document.createElement("canvas");
     canvas.width = w;
     canvas.height = h;
@@ -487,6 +641,38 @@ async function cropPriceRegion(file: Blob): Promise<Blob | null> {
   } catch {
     return null;
   }
+}
+
+async function cropPriceRegions(file: Blob): Promise<string[]> {
+  const { createWorker, PSM } = await import("tesseract.js");
+  const worker = await createWorker("pol+eng", 1, { logger: () => {} });
+
+  const regions = [
+    { x: 0.5, y: 0.15, w: 0.48, h: 0.28 },
+    { x: 0.35, y: 0.12, w: 0.6, h: 0.32 },
+    { x: 0.55, y: 0.1, w: 0.42, h: 0.35 },
+  ];
+
+  const texts: string[] = [];
+
+  try {
+    await worker.setParameters({ tessedit_pageseg_mode: PSM.SPARSE_TEXT });
+
+    for (const r of regions) {
+      const crop = await cropRegion(file, r.x, r.y, r.w, r.h);
+      if (!crop) continue;
+      const {
+        data: { text },
+      } = await worker.recognize(crop);
+      if (text?.trim()) texts.push(text.trim());
+    }
+
+    await worker.setParameters({ tessedit_pageseg_mode: PSM.AUTO });
+  } finally {
+    await worker.terminate();
+  }
+
+  return texts;
 }
 
 export async function recognizeImageText(file: Blob): Promise<string> {
@@ -508,14 +694,8 @@ export async function recognizeImageText(file: Blob): Promise<string> {
       await worker.setParameters({ tessedit_pageseg_mode: PSM.AUTO });
     }
 
-    const priceCrop = await cropPriceRegion(file);
-    let priceText = "";
-    if (priceCrop) {
-      const {
-        data: { text },
-      } = await worker.recognize(priceCrop);
-      priceText = text || "";
-    }
+    const priceTexts = await cropPriceRegions(file);
+    const priceText = priceTexts.join("\n---\n");
 
     const {
       data: { text: fullText },
