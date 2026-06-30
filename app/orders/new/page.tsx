@@ -22,6 +22,7 @@ import {
   createLineFromScreenshot,
   type ScreenshotApplyPayload,
 } from "@/components/ScreenshotLineCapture";
+import { AttachmentImageLink } from "@/components/AttachmentImageLink";
 
 export default function NewOrderPage() {
   const router = useRouter();
@@ -422,6 +423,7 @@ export default function NewOrderPage() {
                         <thead>
                           <tr className="border-b bg-gray-50">
                             <th className="text-left p-2 font-semibold text-sm">No</th>
+                            <th className="text-center p-2 font-semibold text-sm w-14">Photo</th>
                             <th className="text-left p-2 font-semibold text-sm">Product name</th>
                             <th className="text-left p-2 font-semibold text-sm">Website URL</th>
                             <th className="text-left p-2 font-semibold text-sm">Supplier</th>
@@ -444,6 +446,16 @@ export default function NewOrderPage() {
                             return (
                               <tr key={line.line_number || index} className="border-b hover:bg-gray-50/50 transition-colors">
                                 <td className="p-2 font-medium text-sm">{line.line_number}</td>
+                                <td className="p-2 text-center">
+                                  {line.attachment_url ? (
+                                    <AttachmentImageLink
+                                      attachmentUrl={line.attachment_url}
+                                      thumbnail
+                                    />
+                                  ) : (
+                                    <span className="text-muted-foreground text-xs">—</span>
+                                  )}
+                                </td>
                                 <td className="p-2">
                                   <Input
                                     value={line.product_name}

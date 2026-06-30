@@ -19,6 +19,7 @@ import { Logo } from "@/components/Logo";
 import { SupplierCombobox } from "@/components/SupplierCombobox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus, Save, Trash2 } from "lucide-react";
+import { AttachmentImageLink } from "@/components/AttachmentImageLink";
 import { PLN_TO_EUR_RATE, DEFAULT_VAT_RATE, EUR_TO_PLN_DIVISOR } from "@/lib/constants";
 import { formatCurrency } from "@/lib/utils";
 
@@ -369,6 +370,7 @@ export default function EditOrderPage() {
                   <thead>
                     <tr className="border-b bg-gray-50">
                       <th className="text-left p-3 font-semibold text-sm">No</th>
+                      <th className="text-center p-3 font-semibold text-sm w-14">Photo</th>
                       <th className="text-left p-3 font-semibold text-sm">Product name</th>
                       <th className="text-left p-3 font-semibold text-sm">Website URL</th>
                       <th className="text-left p-3 font-semibold text-sm">Supplier</th>
@@ -391,6 +393,16 @@ export default function EditOrderPage() {
                       return (
                         <tr key={line.line_number || index} className="border-b hover:bg-gray-50/50 transition-colors">
                           <td className="p-3 font-medium text-sm">{line.line_number}</td>
+                          <td className="p-3 text-center">
+                            {line.attachment_url ? (
+                              <AttachmentImageLink
+                                attachmentUrl={line.attachment_url}
+                                thumbnail
+                              />
+                            ) : (
+                              <span className="text-muted-foreground text-xs">—</span>
+                            )}
+                          </td>
                           <td className="p-3">
                             <Input
                               data-line-index={index}

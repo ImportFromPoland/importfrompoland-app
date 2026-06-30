@@ -13,6 +13,7 @@ import { Logo } from "@/components/Logo";
 import { formatDate, formatCurrency, orderLineGrossEURDisplay, orderLineUnitGrossEURDisplay } from "@/lib/utils";
 import { TotalsPanel } from "@/components/TotalsPanel";
 import { Send, Edit2, Check, X, FileText, RotateCcw } from "lucide-react";
+import { AttachmentImageLink } from "@/components/AttachmentImageLink";
 
 export default function OrderDetailPage() {
   const router = useRouter();
@@ -335,6 +336,7 @@ export default function OrderDetailPage() {
                       <thead>
                         <tr className="border-b">
                           <th className="text-left p-2">#</th>
+                          <th className="text-center p-2 w-14">Photo</th>
                           <th className="text-left p-2">Product</th>
                           <th className="text-right p-2">Unit Price (EUR)</th>
                           <th className="text-right p-2">Qty</th>
@@ -349,6 +351,17 @@ export default function OrderDetailPage() {
                           return (
                             <tr key={item.id} className="border-b">
                               <td className="p-2">{item.line_number}</td>
+                              <td className="p-2 text-center">
+                                {item.attachment_url ? (
+                                  <AttachmentImageLink
+                                    attachmentUrl={item.attachment_url}
+                                    thumbnail
+                                    label="Screenshot"
+                                  />
+                                ) : (
+                                  <span className="text-muted-foreground text-xs">—</span>
+                                )}
+                              </td>
                               <td className="p-2">
                                 <div>
                                   <p className="font-medium">{item.product_name}</p>
