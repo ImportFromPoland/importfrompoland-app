@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
@@ -12,7 +12,13 @@ import { PDFLink } from "@/components/PDFLink";
 import { Logo } from "@/components/Logo";
 import { formatDate, formatCurrency, orderLineGrossEURDisplay, orderLineUnitGrossEURDisplay } from "@/lib/utils";
 import { TotalsPanel } from "@/components/TotalsPanel";
-import { Send, Edit2, Check, X, FileText, RotateCcw } from "lucide-react";
+import { BankTransferDiscountOption } from "@/components/BankTransferDiscountOption";
+import {
+  computeGrossEurBeforeVolumeDiscount,
+  getVolumeDiscountBreakdown,
+  getVolumeDiscountPercent,
+} from "@/lib/volume-discount";
+import { Send, Edit2, Check, X, FileText, RotateCcw, ExternalLink } from "lucide-react";
 import { AttachmentImageLink } from "@/components/AttachmentImageLink";
 
 export default function OrderDetailPage() {
@@ -29,6 +35,8 @@ export default function OrderDetailPage() {
   const [basketName, setBasketName] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [reverting, setReverting] = useState(false);
+  const [prefersBankTransfer, setPrefersBankTransfer] = useState(false);
+  const [savingPaymentPref, setSavingPaymentPref] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -74,6 +82,7 @@ export default function OrderDetailPage() {
 
       setOrder(orderData);
       setBasketName(orderData.client_notes || "");
+      setPrefersBankTransfer(orderData.prefers_bank_transfer || false);
 
       // Get order totals
       const { data: totalsData } = await supabase
@@ -115,6 +124,126 @@ export default function OrderDetailPage() {
     }
   };
 
+  const draftVolumeDiscount = useMemo(() => {
+    if (!order?.items || order.status !== "draft") {
+      return { percent: order?.discount_percent || 0, label: null as string | null };
+    }
+    const eligibleItems = order.items.filter(
+      (item: any) => item.product_name && item.unit_price > 0
+    );
+    const grossBeforeDiscount = computeGrossEurBeforeVolumeDiscount(
+      eligibleItems,
+      order.vat_rate,
+      order.shipping_cost || 0,
+      order.currency
+    );
+    const percent = getVolumeDiscountPercent(grossBeforeDiscount, prefersBankTransfer);
+    const breakdown = getVolumeDiscountBreakdown(grossBeforeDiscount, prefersBankTransfer);
+    const parts: string[] = [];
+    if (breakdown.volumePercent > 0 && breakdown.tierLabel) {
+      parts.push(`order ${breakdown.tierLabel}`);
+    }
+    if (breakdown.bankBonus > 0) {
+      parts.push("bank transfer");
+    }
+    return { percent, label: parts.length > 0 ? parts.join(" + ") : null };
+  }, [order, prefersBankTransfer]);
+
+  useEffect(() => {
+    async function syncDraftDiscount() {
+      if (!order || order.status !== "draft" || !order.items?.length) return;
+
+      const eligibleItems = order.items.filter(
+        (item: any) => item.product_name && item.unit_price > 0
+      );
+      const grossBeforeDiscount = computeGrossEurBeforeVolumeDiscount(
+        eligibleItems,
+        order.vat_rate,
+        order.shipping_cost || 0,
+        order.currency
+      );
+      const discountPercent = getVolumeDiscountPercent(
+        grossBeforeDiscount,
+        order.prefers_bank_transfer || false
+      );
+      if (discountPercent === (order.discount_percent || 0)) return;
+
+      const { error } = await supabase
+        .from("orders")
+        .update({ discount_percent: discountPercent })
+        .eq("id", order.id);
+
+      if (error) return;
+
+      setOrder({ ...order, discount_percent: discountPercent });
+
+      const { data: totalsData } = await supabase
+        .from("order_totals")
+        .select("*")
+        .eq("order_id", order.id)
+        .single();
+      if (totalsData) setTotals(totalsData);
+    }
+
+    syncDraftDiscount();
+  }, [
+    order?.id,
+    order?.status,
+    order?.items,
+    order?.vat_rate,
+    order?.shipping_cost,
+    order?.prefers_bank_transfer,
+    order?.discount_percent,
+  ]);
+
+  const savePaymentPreference = async (checked: boolean) => {
+    if (!order || order.status !== "draft") return;
+
+    setSavingPaymentPref(true);
+    try {
+      const eligibleItems = (order.items || []).filter(
+        (item: any) => item.product_name && item.unit_price > 0
+      );
+      const grossBeforeDiscount = computeGrossEurBeforeVolumeDiscount(
+        eligibleItems,
+        order.vat_rate,
+        order.shipping_cost || 0,
+        order.currency
+      );
+      const discountPercent = getVolumeDiscountPercent(grossBeforeDiscount, checked);
+
+      const { error } = await supabase
+        .from("orders")
+        .update({
+          prefers_bank_transfer: checked,
+          discount_percent: discountPercent,
+          ...(checked ? { payment_link_url: null } : {}),
+        })
+        .eq("id", order.id);
+
+      if (error) throw error;
+
+      setPrefersBankTransfer(checked);
+      setOrder({
+        ...order,
+        prefers_bank_transfer: checked,
+        discount_percent: discountPercent,
+        payment_link_url: checked ? null : order.payment_link_url,
+      });
+
+      const { data: totalsData } = await supabase
+        .from("order_totals")
+        .select("*")
+        .eq("order_id", order.id)
+        .single();
+      if (totalsData) setTotals(totalsData);
+    } catch (error: any) {
+      alert("Error saving payment preference: " + error.message);
+    } finally {
+      setSavingPaymentPref(false);
+    }
+  };
+
   const submitOrder = async () => {
     if (!order) return;
     
@@ -125,21 +254,29 @@ export default function OrderDetailPage() {
 
     setSubmitting(true);
     try {
-      // Update order status to submitted
-      // Order number will be auto-generated by database trigger
-      const { error } = await supabase
-        .from("orders")
-        .update({
-          status: "submitted",
-          submitted_at: new Date().toISOString(),
-        })
-        .eq("id", order.id);
+      const { data: session } = await supabase.auth.getSession();
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/submit-order`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${session.session?.access_token}`,
+          },
+          body: JSON.stringify({
+            order_id: order.id,
+            prefers_bank_transfer: prefersBankTransfer,
+          }),
+        }
+      );
 
-      if (error) throw error;
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to submit order");
+      }
 
       alert("Thank you for submitting your order. Our admin team will confirm the details and will confirm your order shortly.");
       
-      // Redirect to dashboard
       router.push("/");
       router.refresh();
     } catch (error: any) {
@@ -605,18 +742,76 @@ export default function OrderDetailPage() {
             </Card>
 
             {totals && (
-              <TotalsPanel
-                itemsNet={totals.items_net || 0}
-                vatRate={order.vat_rate}
-                vatAmount={totals.vat_amount || 0}
-                itemsGross={totals.items_gross || 0}
-                shippingCost={order.shipping_cost}
-                headerDiscountPercent={order.discount_percent || 0}
-                headerMarkupPercent={order.markup_percent || 0}
-                grandTotal={totals.grand_total || 0}
-                currency={order.currency}
-                clientView={true}
-              />
+              <>
+                {order.status === "draft" && (
+                  <BankTransferDiscountOption
+                    checked={prefersBankTransfer}
+                    onCheckedChange={savePaymentPreference}
+                    disabled={savingPaymentPref}
+                  />
+                )}
+                <TotalsPanel
+                  itemsNet={totals.items_net_before_header ?? totals.items_net ?? 0}
+                  vatRate={order.vat_rate}
+                  vatAmount={totals.vat_amount || 0}
+                  itemsGross={totals.items_gross || 0}
+                  shippingCost={order.shipping_cost}
+                  headerDiscountPercent={
+                    order.status === "draft"
+                      ? draftVolumeDiscount.percent
+                      : order.discount_percent || 0
+                  }
+                  headerMarkupPercent={order.markup_percent || 0}
+                  grandTotal={totals.grand_total || 0}
+                  currency={order.currency}
+                  clientView={true}
+                  volumeDiscountLabel={
+                    order.status === "draft" ? draftVolumeDiscount.label : null
+                  }
+                />
+              </>
+            )}
+
+            {order.payment_link_url &&
+              !order.prefers_bank_transfer &&
+              ["confirmed", "paid", "partially_packed", "packed", "partially_dispatched", "dispatched", "partially_delivered", "delivered"].includes(
+                order.status
+              ) && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg">Pay Online</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <a
+                    href={order.payment_link_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 text-primary font-medium hover:underline"
+                  >
+                    Open payment link
+                    <ExternalLink className="h-4 w-4" />
+                  </a>
+                </CardContent>
+              </Card>
+            )}
+
+            {order.prefers_bank_transfer &&
+              ["confirmed", "paid", "partially_packed", "packed", "partially_dispatched", "dispatched", "partially_delivered", "delivered"].includes(
+                order.status
+              ) && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg">Bank Transfer</CardTitle>
+                </CardHeader>
+                <CardContent className="text-sm space-y-1">
+                  <p>Bank: PKO Bank Polski</p>
+                  <p>IBAN: PL 77 1020 2313 0000 3602 1175 9752</p>
+                  <p>BIC/SWIFT: BPKOPLPW</p>
+                  <p className="font-medium pt-2">
+                    Reference: {order.number}
+                  </p>
+                </CardContent>
+              </Card>
             )}
 
             {order.status === 'draft' && (

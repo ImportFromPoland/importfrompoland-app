@@ -320,9 +320,14 @@ export default function AdminOrderDetailPage() {
     }
 
     try {
+      const updatePayload: Record<string, unknown> = { status: "confirmed" };
+      if (order.prefers_bank_transfer) {
+        updatePayload.payment_link_url = null;
+      }
+
       const { error } = await supabase
         .from("orders")
-        .update({ status: "confirmed" })
+        .update(updatePayload)
         .eq("id", order.id);
 
       if (error) throw error;
@@ -1092,7 +1097,32 @@ export default function AdminOrderDetailPage() {
                     ? "Percentage discount applied to subtotal"
                     : `Fixed amount discount in ${order.currency || "EUR"}`}
                 </p>
+                {order.prefers_bank_transfer && (
+                  <p className="text-xs text-green-700 font-medium">
+                    Client chose bank transfer (+1% volume discount). Do not add a payment link.
+                  </p>
+                )}
               </div>
+
+              {!order.prefers_bank_transfer && (
+                <div className="space-y-2 border-t pt-4">
+                  <Label>Payment Link (confirmation)</Label>
+                  <Input
+                    type="url"
+                    placeholder="https://..."
+                    value={order.payment_link_url || ""}
+                    onChange={(e) =>
+                      setOrder({ ...order, payment_link_url: e.target.value || null })
+                    }
+                    onBlur={(e) =>
+                      updateOrderHeader("payment_link_url", e.target.value.trim() || null)
+                    }
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Shown on order confirmation PDF and client portal when the client did not choose bank transfer.
+                  </p>
+                </div>
+              )}
 
               <div className="space-y-2">
                 <Label>Transport Cost (PLN Net)</Label>

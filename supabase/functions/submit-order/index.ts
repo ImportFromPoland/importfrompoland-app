@@ -11,6 +11,73 @@ const corsHeaders = {
   "Access-Control-Max-Age": "86400",
 };
 
+const PLN_TO_EUR_RATE = 1 / 2.95;
+
+function lineNetEur(
+  item: {
+    unit_price: number;
+    quantity: number;
+    currency: string;
+    discount_percent?: number;
+    original_net_price?: number | null;
+    fx_rate?: number | null;
+  },
+  vatRate: number,
+  orderCurrency: string
+): number {
+  let lineNet = 0;
+
+  if (item.original_net_price) {
+    lineNet = item.original_net_price * item.quantity;
+  } else {
+    let lineGrossEUR = item.unit_price * item.quantity;
+    if (item.currency === "PLN" && orderCurrency === "EUR") {
+      const rate = item.fx_rate ?? PLN_TO_EUR_RATE;
+      lineGrossEUR = item.unit_price * item.quantity * rate;
+    }
+    lineNet = lineGrossEUR / (1 + vatRate / 100);
+  }
+
+  if ((item.discount_percent ?? 0) > 0) {
+    lineNet = lineNet * (1 - (item.discount_percent ?? 0) / 100);
+  }
+
+  return lineNet;
+}
+
+function computeGrossEurBeforeVolumeDiscount(
+  items: Array<{
+    unit_price: number;
+    quantity: number;
+    currency: string;
+    discount_percent?: number;
+    original_net_price?: number | null;
+    fx_rate?: number | null;
+  }>,
+  vatRate: number,
+  shippingCost: number,
+  orderCurrency: string
+): number {
+  const itemsNet = items.reduce(
+    (sum, item) => sum + lineNetEur(item, vatRate, orderCurrency),
+    0
+  );
+  const vatAmount = (itemsNet * vatRate) / 100;
+  return itemsNet + vatAmount + shippingCost;
+}
+
+function getVolumeDiscountPercent(
+  grossEur: number,
+  prefersBankTransfer: boolean
+): number {
+  let percent = 0;
+  if (grossEur > 7500) percent = 6;
+  else if (grossEur > 5000) percent = 4;
+  else if (grossEur > 2500) percent = 2;
+  if (prefersBankTransfer) percent += 1;
+  return percent;
+}
+
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
@@ -44,7 +111,7 @@ serve(async (req) => {
       throw new Error("Unauthorized");
     }
 
-    const { order_id } = await req.json();
+    const { order_id, prefers_bank_transfer } = await req.json();
 
     if (!order_id) {
       throw new Error("order_id is required");
@@ -88,14 +155,29 @@ serve(async (req) => {
     }
 
     // Validate order has at least one item
-    const { count: itemCount } = await supabaseClient
+    const { data: items, error: itemsError } = await supabaseClient
       .from("order_items")
-      .select("*", { count: "exact", head: true })
+      .select("*")
       .eq("order_id", order_id);
 
-    if (!itemCount || itemCount === 0) {
+    if (itemsError) {
+      throw itemsError;
+    }
+
+    if (!items || items.length === 0) {
       throw new Error("Cannot submit order with no items");
     }
+
+    const prefersBankTransfer =
+      prefers_bank_transfer ?? order.prefers_bank_transfer ?? false;
+
+    const grossEur = computeGrossEurBeforeVolumeDiscount(
+      items,
+      order.vat_rate,
+      order.shipping_cost || 0,
+      order.currency
+    );
+    const discountPercent = getVolumeDiscountPercent(grossEur, prefersBankTransfer);
 
     // Generate order number
     const { data: orderNumberData } = await supabaseClient
@@ -103,14 +185,22 @@ serve(async (req) => {
 
     const orderNumber = orderNumberData;
 
+    const orderUpdate: Record<string, unknown> = {
+      number: orderNumber,
+      status: "submitted",
+      submitted_at: new Date().toISOString(),
+      discount_percent: discountPercent,
+      prefers_bank_transfer: prefersBankTransfer,
+    };
+
+    if (prefersBankTransfer) {
+      orderUpdate.payment_link_url = null;
+    }
+
     // Update order
     const { error: updateError } = await supabaseClient
       .from("orders")
-      .update({
-        number: orderNumber,
-        status: "submitted",
-        submitted_at: new Date().toISOString(),
-      })
+      .update(orderUpdate)
       .eq("id", order_id);
 
     if (updateError) {
@@ -124,7 +214,11 @@ serve(async (req) => {
       action: "status_change",
       from_status: "draft",
       to_status: "submitted",
-      payload: { order_number: orderNumber },
+      payload: {
+        order_number: orderNumber,
+        discount_percent: discountPercent,
+        prefers_bank_transfer: prefersBankTransfer,
+      },
     });
 
     // Create notification for admins
@@ -149,6 +243,7 @@ serve(async (req) => {
         success: true,
         order_number: orderNumber,
         order_id,
+        discount_percent: discountPercent,
       }),
       {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -165,4 +260,3 @@ serve(async (req) => {
     );
   }
 });
-

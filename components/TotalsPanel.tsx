@@ -16,6 +16,7 @@ interface TotalsPanelProps {
   currency: string;
   showTooltip?: boolean;
   clientView?: boolean; // Simplified view for clients
+  volumeDiscountLabel?: string | null;
 }
 
 export function TotalsPanel({
@@ -30,6 +31,7 @@ export function TotalsPanel({
   currency,
   showTooltip = true,
   clientView = false,
+  volumeDiscountLabel,
 }: TotalsPanelProps) {
   // Simplified client view - just show the grand total
   if (clientView) {
@@ -53,6 +55,18 @@ export function TotalsPanel({
             <span>Subtotal (excl. VAT):</span>
             <span className="font-medium">{formatCurrency(itemsNet, currency)}</span>
           </div>
+
+          {headerDiscountPercent > 0 && (
+            <div className="flex justify-between text-base text-green-700">
+              <span>
+                Discount ({headerDiscountPercent}%
+                {volumeDiscountLabel ? ` — ${volumeDiscountLabel}` : ""}):
+              </span>
+              <span className="font-medium">
+                -{formatCurrency(itemsNet * (headerDiscountPercent / 100), currency)}
+              </span>
+            </div>
+          )}
 
           <div className="flex justify-between text-base">
             <span>VAT:</span>

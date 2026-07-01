@@ -22,6 +22,12 @@ import { Plus, Save, Trash2 } from "lucide-react";
 import { AttachmentImageLink } from "@/components/AttachmentImageLink";
 import { PLN_TO_EUR_RATE, DEFAULT_VAT_RATE, EUR_TO_PLN_DIVISOR } from "@/lib/constants";
 import { formatCurrency } from "@/lib/utils";
+import { BankTransferDiscountOption } from "@/components/BankTransferDiscountOption";
+import {
+  computeGrossEurBeforeVolumeDiscount,
+  getVolumeDiscountBreakdown,
+  getVolumeDiscountPercent,
+} from "@/lib/volume-discount";
 
 export default function EditOrderPage() {
   const router = useRouter();
@@ -35,8 +41,8 @@ export default function EditOrderPage() {
   const [currency] = useState<"EUR" | "PLN">("EUR");
   const [vatRate, setVatRate] = useState(DEFAULT_VAT_RATE);
   const [shippingCost, setShippingCost] = useState(0);
-  const [headerDiscountPercent, setHeaderDiscountPercent] = useState(0);
   const [headerMarkupPercent, setHeaderMarkupPercent] = useState(0);
+  const [prefersBankTransfer, setPrefersBankTransfer] = useState(false);
   const [clientNotes, setClientNotes] = useState("");
 
   const [lines, setLines] = useState<OrderLineData[]>([]);
@@ -79,8 +85,8 @@ export default function EditOrderPage() {
       setOrder(orderData);
       setVatRate(orderData.vat_rate);
       setShippingCost(orderData.shipping_cost);
-      setHeaderDiscountPercent(orderData.discount_percent || 0);
       setHeaderMarkupPercent(orderData.markup_percent || 0);
+      setPrefersBankTransfer(orderData.prefers_bank_transfer || false);
       setClientNotes(orderData.client_notes || "");
 
       // Load items
@@ -174,6 +180,28 @@ export default function EditOrderPage() {
     setLines([...lines, createLineFromScreenshot(maxLineNumber + 1, payload)]);
   };
 
+  const volumeDiscount = useMemo(() => {
+    const eligibleLines = lines.filter((line) => line.product_name && line.unit_price > 0);
+    const grossBeforeDiscount = computeGrossEurBeforeVolumeDiscount(
+      eligibleLines,
+      vatRate,
+      shippingCost,
+      currency
+    );
+    const percent = getVolumeDiscountPercent(grossBeforeDiscount, prefersBankTransfer);
+    const breakdown = getVolumeDiscountBreakdown(grossBeforeDiscount, prefersBankTransfer);
+    const parts: string[] = [];
+    if (breakdown.volumePercent > 0 && breakdown.tierLabel) {
+      parts.push(`order ${breakdown.tierLabel}`);
+    }
+    if (breakdown.bankBonus > 0) {
+      parts.push("bank transfer");
+    }
+    return { percent, label: parts.length > 0 ? parts.join(" + ") : null };
+  }, [lines, vatRate, shippingCost, currency, prefersBankTransfer]);
+
+  const headerDiscountPercent = volumeDiscount.percent;
+
   const totals = useMemo(() => {
     let itemsNet = 0;
 
@@ -231,6 +259,7 @@ export default function EditOrderPage() {
           shipping_cost: shippingCost,
           discount_percent: headerDiscountPercent,
           markup_percent: headerMarkupPercent,
+          prefers_bank_transfer: prefersBankTransfer,
           client_notes: clientNotes,
         })
         .eq("id", order.id);
@@ -311,7 +340,10 @@ export default function EditOrderPage() {
             "Content-Type": "application/json",
             Authorization: `Bearer ${session.session?.access_token}`,
           },
-          body: JSON.stringify({ order_id: order.id }),
+          body: JSON.stringify({
+            order_id: order.id,
+            prefers_bank_transfer: prefersBankTransfer,
+          }),
         }
       );
 
@@ -568,6 +600,19 @@ export default function EditOrderPage() {
               />
             </CardContent>
           </Card>
+
+          <BankTransferDiscountOption
+            checked={prefersBankTransfer}
+            onCheckedChange={setPrefersBankTransfer}
+          />
+
+          {headerDiscountPercent > 0 && (
+            <p className="text-sm text-green-700">
+              Automatic discount: {headerDiscountPercent}%
+              {volumeDiscount.label ? ` (${volumeDiscount.label})` : ""} — grand total{" "}
+              {formatCurrency(totals.grandTotal, currency)}
+            </p>
+          )}
 
           {/* Action Buttons */}
           <div className="flex justify-end gap-3">

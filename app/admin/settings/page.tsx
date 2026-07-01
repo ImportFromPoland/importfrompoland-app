@@ -47,7 +47,6 @@ export default function AdminSettingsPage() {
   const loadData = async () => {
     setLoading(true);
     try {
-      // Get current user role
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
         const { data: profile } = await supabase
@@ -58,7 +57,6 @@ export default function AdminSettingsPage() {
         setUserRole(profile?.role || "");
       }
 
-      // Load exchange rates
       const { data: rates } = await supabase
         .from("exchange_rates")
         .select("*")
@@ -79,7 +77,6 @@ export default function AdminSettingsPage() {
     }
 
     try {
-      // First, end the current rate if it exists
       const currentRate = exchangeRates.find(rate => !rate.effective_to);
       if (currentRate) {
         await supabase
@@ -88,7 +85,6 @@ export default function AdminSettingsPage() {
           .eq("id", currentRate.id);
       }
 
-      // Add new rate
       const { error } = await supabase
         .from("exchange_rates")
         .insert({
@@ -266,5 +262,3 @@ export default function AdminSettingsPage() {
     </div>
   );
 }
-
-

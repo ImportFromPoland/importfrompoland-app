@@ -444,9 +444,17 @@ export const OrderPDF: React.FC<OrderPDFProps> = ({ order, company, items, total
               {order.vat_rate === 0 ? 'Subtotal (net):' : 'Subtotal (excl. VAT):'}
             </Text>
             <Text style={styles.totalValue}>
-              {formatCurrency(totals?.subtotal_without_vat || 0, order.currency)}
+              {formatCurrency((totals?.items_net_before_header ?? totals?.subtotal_without_vat) || 0, order.currency)}
             </Text>
           </View>
+          {(order.discount_percent || 0) > 0 && (
+            <View style={styles.totalRow}>
+              <Text style={styles.totalLabel}>Discount ({order.discount_percent}%):</Text>
+              <Text style={styles.totalValue}>
+                -{formatCurrency(totals?.header_discount_amt || 0, order.currency)}
+              </Text>
+            </View>
+          )}
           {order.vat_rate > 0 && (
             <View style={styles.totalRow}>
               <Text style={styles.totalLabel}>VAT ({order.vat_rate}%):</Text>
@@ -484,6 +492,14 @@ export const OrderPDF: React.FC<OrderPDFProps> = ({ order, company, items, total
         )}
 
         {/* Payment Information */}
+        {order.payment_link_url && !order.prefers_bank_transfer && (
+          <View style={styles.paymentBox}>
+            <Text style={styles.paymentTitle}>Online Payment</Text>
+            <Text style={styles.paymentDetail}>{order.payment_link_url}</Text>
+          </View>
+        )}
+
+        {(order.prefers_bank_transfer || !order.payment_link_url) && (
         <View style={styles.paymentBox}>
           <Text style={styles.paymentTitle}>Payment Information</Text>
           <Text style={styles.paymentDetail}>
@@ -502,6 +518,7 @@ export const OrderPDF: React.FC<OrderPDFProps> = ({ order, company, items, total
             Please include the order number in your payment reference.
           </Text>
         </View>
+        )}
 
         {/* Footer */}
         <View style={styles.footer}>

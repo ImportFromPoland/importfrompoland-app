@@ -9,6 +9,12 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { OrderLineForm, type OrderLineData } from "@/components/OrderLineForm";
 import { TotalsPanel } from "@/components/TotalsPanel";
+import { BankTransferDiscountOption } from "@/components/BankTransferDiscountOption";
+import {
+  computeGrossEurBeforeVolumeDiscount,
+  getVolumeDiscountBreakdown,
+  getVolumeDiscountPercent,
+} from "@/lib/volume-discount";
 import { SupplierCombobox } from "@/components/SupplierCombobox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
@@ -35,8 +41,8 @@ export default function NewOrderPage() {
   const [currency, setCurrency] = useState<"EUR" | "PLN">("EUR");
   const [vatRate, setVatRate] = useState(DEFAULT_VAT_RATE);
   const [shippingCost, setShippingCost] = useState(0);
-  const [headerDiscountPercent, setHeaderDiscountPercent] = useState(0);
   const [headerMarkupPercent, setHeaderMarkupPercent] = useState(0);
+  const [prefersBankTransfer, setPrefersBankTransfer] = useState(false);
   const [clientNotes, setClientNotes] = useState("");
 
   const [lines, setLines] = useState<OrderLineData[]>([
@@ -129,6 +135,28 @@ export default function NewOrderPage() {
     setLines([...lines, createLineFromScreenshot(maxLineNumber + 1, payload)]);
   };
 
+  const volumeDiscount = useMemo(() => {
+    const eligibleLines = lines.filter((line) => line.product_name && line.unit_price > 0);
+    const grossBeforeDiscount = computeGrossEurBeforeVolumeDiscount(
+      eligibleLines,
+      vatRate,
+      shippingCost,
+      currency
+    );
+    const percent = getVolumeDiscountPercent(grossBeforeDiscount, prefersBankTransfer);
+    const breakdown = getVolumeDiscountBreakdown(grossBeforeDiscount, prefersBankTransfer);
+    const parts: string[] = [];
+    if (breakdown.volumePercent > 0 && breakdown.tierLabel) {
+      parts.push(`order ${breakdown.tierLabel}`);
+    }
+    if (breakdown.bankBonus > 0) {
+      parts.push("bank transfer");
+    }
+    return { percent, label: parts.length > 0 ? parts.join(" + ") : null };
+  }, [lines, vatRate, shippingCost, currency, prefersBankTransfer]);
+
+  const headerDiscountPercent = volumeDiscount.percent;
+
   const totals = useMemo(() => {
     let itemsNet = 0;
 
@@ -191,6 +219,7 @@ export default function NewOrderPage() {
           shipping_cost: shippingCost,
           discount_percent: headerDiscountPercent,
           markup_percent: headerMarkupPercent,
+          prefers_bank_transfer: prefersBankTransfer,
           client_notes: clientNotes,
         })
         .select()
@@ -266,6 +295,7 @@ export default function NewOrderPage() {
           shipping_cost: shippingCost,
           discount_percent: headerDiscountPercent,
           markup_percent: headerMarkupPercent,
+          prefers_bank_transfer: prefersBankTransfer,
           client_notes: clientNotes,
         })
         .select()
@@ -328,7 +358,10 @@ export default function NewOrderPage() {
             "Content-Type": "application/json",
             Authorization: `Bearer ${session.session?.access_token}`,
           },
-          body: JSON.stringify({ order_id: order.id }),
+          body: JSON.stringify({
+            order_id: order.id,
+            prefers_bank_transfer: prefersBankTransfer,
+          }),
         }
       );
 
@@ -580,6 +613,10 @@ export default function NewOrderPage() {
                 </Card>
 
                 <div className="space-y-6">
+                  <BankTransferDiscountOption
+                    checked={prefersBankTransfer}
+                    onCheckedChange={setPrefersBankTransfer}
+                  />
                   <TotalsPanel
                     itemsNet={totals.itemsNet}
                     vatRate={vatRate}
@@ -591,6 +628,7 @@ export default function NewOrderPage() {
                     grandTotal={totals.grandTotal}
                     currency={currency}
                     clientView={true}
+                    volumeDiscountLabel={volumeDiscount.label}
                   />
 
                   <Button
@@ -628,7 +666,11 @@ export default function NewOrderPage() {
           {viewMode === "classic" && (
             <div className="space-y-6">
               {/* Order Settings hidden from clients - managed by admin */}
-              
+
+              <BankTransferDiscountOption
+                checked={prefersBankTransfer}
+                onCheckedChange={setPrefersBankTransfer}
+              />
               <TotalsPanel
                 itemsNet={totals.itemsNet}
                 vatRate={vatRate}
@@ -640,6 +682,7 @@ export default function NewOrderPage() {
                 grandTotal={totals.grandTotal}
                 currency={currency}
                 clientView={true}
+                volumeDiscountLabel={volumeDiscount.label}
               />
 
               <div className="space-y-2">
