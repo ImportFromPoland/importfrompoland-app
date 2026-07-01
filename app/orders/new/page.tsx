@@ -15,7 +15,7 @@ import {
   getVolumeDiscountBreakdown,
   getVolumeDiscountPercent,
 } from "@/lib/volume-discount";
-import { submitClientOrder } from "@/lib/submit-client-order";
+import { submitClientOrder, formatSubmitOrderError } from "@/lib/submit-client-order";
 import { SupplierCombobox } from "@/components/SupplierCombobox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
@@ -356,7 +356,7 @@ export default function NewOrderPage() {
 
       router.push(`/orders/${order.id}`);
     } catch (error: any) {
-      alert("Error submitting order: " + error.message);
+      alert("Error submitting order: " + formatSubmitOrderError(error));
     } finally {
       setLoading(false);
     }

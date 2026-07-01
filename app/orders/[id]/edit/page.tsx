@@ -28,7 +28,7 @@ import {
   getVolumeDiscountBreakdown,
   getVolumeDiscountPercent,
 } from "@/lib/volume-discount";
-import { submitClientOrder } from "@/lib/submit-client-order";
+import { submitClientOrder, formatSubmitOrderError } from "@/lib/submit-client-order";
 
 export default function EditOrderPage() {
   const router = useRouter();
@@ -338,7 +338,7 @@ export default function EditOrderPage() {
 
       router.push(`/orders/${order.id}`);
     } catch (error: any) {
-      alert("Error submitting order: " + error.message);
+      alert("Error submitting order: " + formatSubmitOrderError(error));
     }
   };
 

@@ -18,7 +18,7 @@ import {
   getVolumeDiscountBreakdown,
   getVolumeDiscountPercent,
 } from "@/lib/volume-discount";
-import { submitClientOrder } from "@/lib/submit-client-order";
+import { submitClientOrder, formatSubmitOrderError } from "@/lib/submit-client-order";
 import { Send, Edit2, Check, X, FileText, RotateCcw, ExternalLink } from "lucide-react";
 import { AttachmentImageLink } from "@/components/AttachmentImageLink";
 
@@ -279,7 +279,7 @@ export default function OrderDetailPage() {
       router.push("/");
       router.refresh();
     } catch (error: any) {
-      alert("Error submitting order: " + error.message);
+      alert("Error submitting order: " + formatSubmitOrderError(error));
     } finally {
       setSubmitting(false);
     }
