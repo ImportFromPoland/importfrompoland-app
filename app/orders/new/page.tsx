@@ -15,6 +15,7 @@ import {
   getVolumeDiscountBreakdown,
   getVolumeDiscountPercent,
 } from "@/lib/volume-discount";
+import { submitClientOrder } from "@/lib/submit-client-order";
 import { SupplierCombobox } from "@/components/SupplierCombobox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
@@ -348,27 +349,10 @@ export default function NewOrderPage() {
 
       if (itemsError) throw itemsError;
 
-      // Submit order via Edge Function
-      const { data: session } = await supabase.auth.getSession();
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/submit-order`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${session.session?.access_token}`,
-          },
-          body: JSON.stringify({
-            order_id: order.id,
-            prefers_bank_transfer: prefersBankTransfer,
-          }),
-        }
-      );
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || "Failed to submit order");
-      }
+      await submitClientOrder(supabase, order.id, {
+        discountPercent: headerDiscountPercent,
+        prefersBankTransfer,
+      });
 
       router.push(`/orders/${order.id}`);
     } catch (error: any) {

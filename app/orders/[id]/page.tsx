@@ -18,6 +18,7 @@ import {
   getVolumeDiscountBreakdown,
   getVolumeDiscountPercent,
 } from "@/lib/volume-discount";
+import { submitClientOrder } from "@/lib/submit-client-order";
 import { Send, Edit2, Check, X, FileText, RotateCcw, ExternalLink } from "lucide-react";
 import { AttachmentImageLink } from "@/components/AttachmentImageLink";
 
@@ -254,26 +255,24 @@ export default function OrderDetailPage() {
 
     setSubmitting(true);
     try {
-      const { data: session } = await supabase.auth.getSession();
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/submit-order`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${session.session?.access_token}`,
-          },
-          body: JSON.stringify({
-            order_id: order.id,
-            prefers_bank_transfer: prefersBankTransfer,
-          }),
-        }
+      const eligibleItems = (order.items || []).filter(
+        (item: any) => item.product_name && item.unit_price > 0
+      );
+      const grossBeforeDiscount = computeGrossEurBeforeVolumeDiscount(
+        eligibleItems,
+        order.vat_rate,
+        order.shipping_cost || 0,
+        order.currency
+      );
+      const discountPercent = getVolumeDiscountPercent(
+        grossBeforeDiscount,
+        prefersBankTransfer
       );
 
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || "Failed to submit order");
-      }
+      await submitClientOrder(supabase, order.id, {
+        discountPercent,
+        prefersBankTransfer,
+      });
 
       alert("Thank you for submitting your order. Our admin team will confirm the details and will confirm your order shortly.");
       
