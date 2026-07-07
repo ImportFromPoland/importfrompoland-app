@@ -127,7 +127,11 @@ export default function OrderDetailPage() {
 
   const draftVolumeDiscount = useMemo(() => {
     if (!order?.items || order.status !== "draft") {
-      return { percent: order?.discount_percent || 0, label: null as string | null };
+      return {
+        percent: order?.discount_percent || 0,
+        label: null as string | null,
+        grossBeforeDiscount: 0,
+      };
     }
     const eligibleItems = order.items.filter(
       (item: any) => item.product_name && item.unit_price > 0
@@ -147,7 +151,11 @@ export default function OrderDetailPage() {
     if (breakdown.bankBonus > 0) {
       parts.push("bank transfer");
     }
-    return { percent, label: parts.length > 0 ? parts.join(" + ") : null };
+    return {
+      percent,
+      label: parts.length > 0 ? parts.join(" + ") : null,
+      grossBeforeDiscount,
+    };
   }, [order, prefersBankTransfer]);
 
   useEffect(() => {
@@ -766,6 +774,9 @@ export default function OrderDetailPage() {
                   clientView={true}
                   volumeDiscountLabel={
                     order.status === "draft" ? draftVolumeDiscount.label : null
+                  }
+                  grossBeforeDiscountEur={
+                    order.status === "draft" ? draftVolumeDiscount.grossBeforeDiscount : undefined
                   }
                 />
               </>

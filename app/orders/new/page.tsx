@@ -153,7 +153,7 @@ export default function NewOrderPage() {
     if (breakdown.bankBonus > 0) {
       parts.push("bank transfer");
     }
-    return { percent, label: parts.length > 0 ? parts.join(" + ") : null };
+    return { percent, label: parts.length > 0 ? parts.join(" + ") : null, grossBeforeDiscount };
   }, [lines, vatRate, shippingCost, currency, prefersBankTransfer]);
 
   const headerDiscountPercent = volumeDiscount.percent;
@@ -613,6 +613,7 @@ export default function NewOrderPage() {
                     currency={currency}
                     clientView={true}
                     volumeDiscountLabel={volumeDiscount.label}
+                    grossBeforeDiscountEur={volumeDiscount.grossBeforeDiscount}
                   />
 
                   <Button
@@ -667,6 +668,7 @@ export default function NewOrderPage() {
                 currency={currency}
                 clientView={true}
                 volumeDiscountLabel={volumeDiscount.label}
+                grossBeforeDiscountEur={volumeDiscount.grossBeforeDiscount}
               />
 
               <div className="space-y-2">

@@ -3,6 +3,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatCurrency } from "@/lib/utils";
 import { Info } from "lucide-react";
+import { VolumeDiscountProgressMessage } from "@/components/VolumeDiscountProgressMessage";
 
 interface TotalsPanelProps {
   itemsNet: number;
@@ -17,6 +18,7 @@ interface TotalsPanelProps {
   showTooltip?: boolean;
   clientView?: boolean; // Simplified view for clients
   volumeDiscountLabel?: string | null;
+  grossBeforeDiscountEur?: number;
 }
 
 export function TotalsPanel({
@@ -32,6 +34,7 @@ export function TotalsPanel({
   showTooltip = true,
   clientView = false,
   volumeDiscountLabel,
+  grossBeforeDiscountEur,
 }: TotalsPanelProps) {
   // Simplified client view - just show the grand total
   if (clientView) {
@@ -57,7 +60,7 @@ export function TotalsPanel({
           </div>
 
           {headerDiscountPercent > 0 && (
-            <div className="flex justify-between text-base text-green-700">
+            <div className="flex justify-between text-base text-primary">
               <span>
                 Discount ({headerDiscountPercent}%
                 {volumeDiscountLabel ? ` — ${volumeDiscountLabel}` : ""}):
@@ -78,6 +81,12 @@ export function TotalsPanel({
               <span>Shipping:</span>
               <span className="font-medium">{formatCurrency(shippingCost, currency)}</span>
             </div>
+          )}
+
+          {grossBeforeDiscountEur != null && (
+            <VolumeDiscountProgressMessage
+              grossBeforeDiscountEur={grossBeforeDiscountEur}
+            />
           )}
 
           <div className="border-t pt-4 flex justify-between text-xl font-bold">

@@ -16,6 +16,14 @@ export const VOLUME_DISCOUNT_TIERS = [
   { min_gross_eur: 2500, discount_percent: 2 },
 ] as const;
 
+export const VOLUME_DISCOUNT_TIERS_ASC = [...VOLUME_DISCOUNT_TIERS].sort(
+  (a, b) => a.min_gross_eur - b.min_gross_eur
+);
+
+export const MAX_VOLUME_DISCOUNT_PERCENT = VOLUME_DISCOUNT_TIERS_ASC[
+  VOLUME_DISCOUNT_TIERS_ASC.length - 1
+].discount_percent;
+
 export const BANK_TRANSFER_BONUS_PERCENT = 1;
 
 export function formatVolumeTierLabel(minGrossEur: number): string {
@@ -105,4 +113,36 @@ export function getVolumeDiscountBreakdown(
     tierLabel,
     grossEur,
   };
+}
+
+export type VolumeDiscountProgress =
+  | { status: "max"; currentPercent: number }
+  | {
+      status: "next";
+      amountNeeded: number;
+      nextPercent: number;
+      nextThreshold: number;
+    };
+
+/** How much gross EUR is still needed to reach the next volume tier. */
+export function getVolumeDiscountProgress(grossEur: number): VolumeDiscountProgress {
+  const maxTier = VOLUME_DISCOUNT_TIERS_ASC[VOLUME_DISCOUNT_TIERS_ASC.length - 1];
+
+  if (grossEur > maxTier.min_gross_eur) {
+    return { status: "max", currentPercent: maxTier.discount_percent };
+  }
+
+  for (const tier of VOLUME_DISCOUNT_TIERS_ASC) {
+    if (grossEur <= tier.min_gross_eur) {
+      const amountNeeded = Math.ceil((tier.min_gross_eur - grossEur + 0.01) * 100) / 100;
+      return {
+        status: "next",
+        amountNeeded,
+        nextPercent: tier.discount_percent,
+        nextThreshold: tier.min_gross_eur,
+      };
+    }
+  }
+
+  return { status: "max", currentPercent: maxTier.discount_percent };
 }

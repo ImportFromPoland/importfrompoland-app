@@ -23,6 +23,7 @@ import { AttachmentImageLink } from "@/components/AttachmentImageLink";
 import { PLN_TO_EUR_RATE, DEFAULT_VAT_RATE, EUR_TO_PLN_DIVISOR } from "@/lib/constants";
 import { formatCurrency } from "@/lib/utils";
 import { BankTransferDiscountOption } from "@/components/BankTransferDiscountOption";
+import { VolumeDiscountProgressMessage } from "@/components/VolumeDiscountProgressMessage";
 import {
   computeGrossEurBeforeVolumeDiscount,
   getVolumeDiscountBreakdown,
@@ -198,7 +199,7 @@ export default function EditOrderPage() {
     if (breakdown.bankBonus > 0) {
       parts.push("bank transfer");
     }
-    return { percent, label: parts.length > 0 ? parts.join(" + ") : null };
+    return { percent, label: parts.length > 0 ? parts.join(" + ") : null, grossBeforeDiscount };
   }, [lines, vatRate, shippingCost, currency, prefersBankTransfer]);
 
   const headerDiscountPercent = volumeDiscount.percent;
@@ -543,6 +544,11 @@ export default function EditOrderPage() {
                               <span className="font-medium">{formatCurrency(shippingCost, currency)}</span>
                             </div>
                           )}
+                          <div className="w-full">
+                            <VolumeDiscountProgressMessage
+                              grossBeforeDiscountEur={volumeDiscount.grossBeforeDiscount}
+                            />
+                          </div>
                           <div className="flex justify-between w-full pt-2 border-t border-gray-300">
                             <span className="font-semibold text-base">Grand Total:</span>
                             <span className="font-bold text-lg text-primary">{formatCurrency(totals.grandTotal, currency)}</span>

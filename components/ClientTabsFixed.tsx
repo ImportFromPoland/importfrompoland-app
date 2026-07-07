@@ -18,7 +18,7 @@ import {
   offerLinesNetTotal,
 } from "@/lib/individual-offer-totals";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import SettingsForm from "@/components/SettingsForm";
+import { VolumeDiscountsBanner } from "@/components/VolumeDiscountsBanner";
 
 interface ClientTabsProps {
   baskets: any[];
@@ -284,10 +284,25 @@ function ClientTabsFixed({ baskets, orders, tours, myTours = [], userRole }: Cli
 
   return (
     <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
-      <TabsList className="grid w-full grid-cols-3">
-        <TabsTrigger value="orders">Orders</TabsTrigger>
-        <TabsTrigger value="tours">Tours</TabsTrigger>
-        <TabsTrigger value="settings">Settings</TabsTrigger>
+      <TabsList className="grid w-full grid-cols-3 h-auto p-0 bg-transparent rounded-none border-b border-border gap-0">
+        <TabsTrigger
+          value="orders"
+          className="rounded-none border-b-2 border-transparent pb-3 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:text-foreground"
+        >
+          Orders
+        </TabsTrigger>
+        <TabsTrigger
+          value="tours"
+          className="rounded-none border-b-2 border-transparent pb-3 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:text-foreground"
+        >
+          Tours
+        </TabsTrigger>
+        <TabsTrigger
+          value="settings"
+          className="rounded-none border-b-2 border-transparent pb-3 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:text-foreground"
+        >
+          Settings
+        </TabsTrigger>
       </TabsList>
 
       <TabsContent value="orders" className="space-y-6">
@@ -369,6 +384,8 @@ function ClientTabsFixed({ baskets, orders, tours, myTours = [], userRole }: Cli
             )}
           </CardContent>
         </Card>
+
+        <VolumeDiscountsBanner />
 
         {/* Individual offers (windows, roofs, etc.) */}
         {individualOffers.length > 0 && (
