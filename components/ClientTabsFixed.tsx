@@ -19,6 +19,7 @@ import {
 } from "@/lib/individual-offer-totals";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { VolumeDiscountsBanner } from "@/components/VolumeDiscountsBanner";
+import SettingsForm from "@/components/SettingsForm";
 
 interface ClientTabsProps {
   baskets: any[];
