@@ -37,7 +37,14 @@ interface OrderLineFormProps {
   hideUpload?: boolean;
 }
 
-export function OrderLineForm({ line, onUpdate, onRemove, orderCurrency, vatRate = 23 }: OrderLineFormProps) {
+export function OrderLineForm({
+  line,
+  onUpdate,
+  onRemove,
+  orderCurrency,
+  vatRate = 23,
+  hideUpload = false,
+}: OrderLineFormProps) {
   // Currency is always PLN for client input
   // No need to show conversion details to client
 
