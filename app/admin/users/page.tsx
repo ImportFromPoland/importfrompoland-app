@@ -21,8 +21,19 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { formatDate } from "@/lib/utils";
-import { Shield, Users as UsersIcon, ChevronDown, ChevronRight, Plus } from "lucide-react";
+import { Shield, Users as UsersIcon, ChevronDown, ChevronRight, Plus, Mail } from "lucide-react";
 import SuperadminDeleteButton from "@/components/SuperadminDeleteButton";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 
 const ROLE_COLORS: Record<string, string> = {
   client: "bg-gray-100 text-gray-800",
@@ -53,6 +64,10 @@ export default function AdminUsersPage() {
     company_name: "",
   });
   const [createMessage, setCreateMessage] = useState("");
+  const [setEmailUser, setSetEmailUser] = useState<any | null>(null);
+  const [setEmailValue, setSetEmailValue] = useState("");
+  const [sendResetLink, setSendResetLink] = useState(true);
+  const [settingEmail, setSettingEmail] = useState(false);
 
   useEffect(() => {
     loadUsers();
@@ -125,6 +140,44 @@ export default function AdminUsersPage() {
       setCreateMessage("Error: " + error.message);
     } finally {
       setCreatingClient(false);
+    }
+  };
+
+  const openSetEmailDialog = (user: any) => {
+    setSetEmailUser(user);
+    setSetEmailValue("");
+    setSendResetLink(true);
+  };
+
+  const handleSetClientEmail = async () => {
+    if (!setEmailUser) return;
+    const email = setEmailValue.trim().toLowerCase();
+    if (!email || !email.includes("@")) {
+      alert("Enter a valid email address");
+      return;
+    }
+
+    setSettingEmail(true);
+    try {
+      const response = await fetch("/api/admin/set-client-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          user_id: setEmailUser.id,
+          email,
+          send_reset_link: sendResetLink,
+        }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Failed to set email");
+
+      alert(result.message || "Email updated");
+      setSetEmailUser(null);
+      await loadUsers();
+    } catch (error: any) {
+      alert("Error: " + error.message);
+    } finally {
+      setSettingEmail(false);
     }
   };
 
@@ -430,6 +483,18 @@ export default function AdminUsersPage() {
                         </TableCell>
                         <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                           <div className="flex items-center justify-end gap-2">
+                            {user.email_is_placeholder &&
+                              ["admin", "staff_admin"].includes(currentUser?.role) && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => openSetEmailDialog(user)}
+                                title="Set real email so client can take over account"
+                              >
+                                <Mail className="h-4 w-4 mr-1" />
+                                Set email
+                              </Button>
+                            )}
                             <Select
                               value={user.role}
                               onValueChange={(newRole) => updateUserRole(user.id, newRole)}
@@ -487,10 +552,70 @@ export default function AdminUsersPage() {
                 <li><strong>Warehouse Staff:</strong> Can access warehouse queue, picking, packing features</li>
                 <li><strong>Superadmin:</strong> Full access including user management</li>
               </ul>
+              <p className="mt-3 text-blue-800">
+                <strong>Placeholder accounts:</strong> Use <em>Set email</em> when the client
+                provides a real address. A password reset link is sent so they can take over
+                the account (no default password).
+              </p>
             </div>
           </div>
         </CardContent>
       </Card>
+
+      <Dialog
+        open={!!setEmailUser}
+        onOpenChange={(open) => {
+          if (!open) setSetEmailUser(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Set real email</DialogTitle>
+            <DialogDescription>
+              Replace the placeholder login for{" "}
+              <strong>{setEmailUser?.full_name || "this client"}</strong> so they can sign
+              in and set a password.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="text-sm text-muted-foreground">
+              Current:{" "}
+              <span className="font-mono text-foreground">{setEmailUser?.email}</span>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="real_email">Real email</Label>
+              <Input
+                id="real_email"
+                type="email"
+                value={setEmailValue}
+                onChange={(e) => setSetEmailValue(e.target.value)}
+                placeholder="client@example.com"
+                autoFocus
+              />
+            </div>
+            <div className="flex items-start gap-3">
+              <Checkbox
+                id="send_reset"
+                checked={sendResetLink}
+                onCheckedChange={(value) => setSendResetLink(value === true)}
+                className="mt-0.5"
+              />
+              <Label htmlFor="send_reset" className="cursor-pointer font-normal leading-snug">
+                Send password reset link to this email (recommended). Client sets their own
+                password — there is no default password.
+              </Label>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSetEmailUser(null)} disabled={settingEmail}>
+              Cancel
+            </Button>
+            <Button onClick={handleSetClientEmail} disabled={settingEmail}>
+              {settingEmail ? "Saving..." : "Save email"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
