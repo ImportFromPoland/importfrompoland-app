@@ -102,7 +102,7 @@ export default function ERPPage() {
       // Pobierz order_totals (widok z grand_total, subtotal_without_vat) - filtruj po dacie
       const { data: allTotals } = await supabase
         .from("order_totals")
-        .select("order_id, number, grand_total, subtotal_without_vat, status, submitted_at, created_at")
+        .select("order_id, number, grand_total, subtotal_without_vat, items_net, status, submitted_at, created_at")
         .neq("status", "draft")
         .neq("status", "cancelled");
 
@@ -123,42 +123,84 @@ export default function ERPPage() {
       const ytdTotals = filterByDateRange(allTotals || [], ytdStart, ytdEnd)
         .filter(t => relevantStatuses.includes(t.status));
 
-      const currentMonthSales = currentMonthTotals.reduce((s, t) => s + (Number(t.grand_total) || 0), 0);
-      const previousMonthSales = previousMonthTotals.reduce((s, t) => s + (Number(t.grand_total) || 0), 0);
-      const ytdSales = ytdTotals.reduce((s, t) => s + (Number(t.grand_total) || 0), 0);
-
       const orderIds = [...new Set((allTotals || []).map((t: any) => t.order_id))];
-      let ordersWithCosts: any[] = [];
-      let supplierOrders: any[] = [];
-      if (orderIds.length > 0) {
-        const [owc, so] = await Promise.all([
-          supabase.from("orders").select("id, transport_cost_pln, logistics_cost").in("id", orderIds),
-          supabase.from("supplier_orders").select("order_id, total_cost_pln").in("order_id", orderIds),
-        ]);
-        ordersWithCosts = owc.data || [];
-        supplierOrders = so.data || [];
-      }
+      let purchaseNetPlnByOrder = new Map<string, number>();
+      let deliveryPlnByOrder = new Map<string, number>();
+      let costEurByOrder = new Map<string, number>();
 
-      const supplierCostPLNByOrder = new Map<string, number>();
-      (supplierOrders || []).forEach((so: any) => {
-        const curr = supplierCostPLNByOrder.get(so.order_id) || 0;
-        supplierCostPLNByOrder.set(so.order_id, curr + (Number(so.total_cost_pln) || 0));
-      });
-      const costByOrder = new Map<string, number>();
-      (ordersWithCosts || []).forEach((o: any) => {
-        const supplierPLN = supplierCostPLNByOrder.get(o.id) || 0;
-        const transportPLN = Number(o.transport_cost_pln) || 0;
-        const logisticsEUR = Number(o.logistics_cost) || 0;
-        const totalEUR = (supplierPLN + transportPLN) / EXCHANGE_RATE + logisticsEUR;
-        costByOrder.set(o.id, totalEUR);
-      });
+      if (orderIds.length > 0) {
+        const [itemsRes, sideRes, ordersRes] = await Promise.all([
+          supabase
+            .from("order_items")
+            .select("order_id, net_cost_pln, quantity")
+            .in("order_id", orderIds),
+          supabase
+            .from("order_side_costs")
+            .select("order_id, amount_gross_pln")
+            .in("order_id", orderIds),
+          supabase
+            .from("orders")
+            .select("id, ie_delivery_cost_eur")
+            .in("id", orderIds),
+        ]);
+
+        // net_cost_pln stores GROSS purchase; P&L uses net (= gross / 1.23)
+        (itemsRes.data || []).forEach((item: any) => {
+          const gross =
+            (Number(item.net_cost_pln) || 0) * (Number(item.quantity) || 0);
+          const net = gross / 1.23;
+          purchaseNetPlnByOrder.set(
+            item.order_id,
+            (purchaseNetPlnByOrder.get(item.order_id) || 0) + net
+          );
+        });
+
+        (sideRes.data || []).forEach((c: any) => {
+          const net = (Number(c.amount_gross_pln) || 0) / 1.23;
+          // Side costs (PL shop deliveries) sit with purchase/ops; show under delivery column together with IE
+          deliveryPlnByOrder.set(
+            c.order_id,
+            (deliveryPlnByOrder.get(c.order_id) || 0) + net
+          );
+        });
+
+        (ordersRes.data || []).forEach((o: any) => {
+          const ieEur = Number(o.ie_delivery_cost_eur) || 0;
+          deliveryPlnByOrder.set(
+            o.id,
+            (deliveryPlnByOrder.get(o.id) || 0) + ieEur * EXCHANGE_RATE
+          );
+        });
+
+        orderIds.forEach((id) => {
+          const purchaseNet = purchaseNetPlnByOrder.get(id) || 0;
+          const deliveryPln = deliveryPlnByOrder.get(id) || 0;
+          costEurByOrder.set(
+            id,
+            (purchaseNet + deliveryPln) / EXCHANGE_RATE
+          );
+        });
+      }
 
       const calcProfit = (totals: any[]) =>
         totals.reduce((s, t) => {
-          const rev = Number(t.grand_total) || 0;
-          const cost = costByOrder.get(t.order_id) ?? (rev * 0.8);
-          return s + (rev - cost);
+          const revNet = Number(t.items_net ?? t.subtotal_without_vat) || 0;
+          const cost = costEurByOrder.get(t.order_id) || 0;
+          return s + (revNet - cost);
         }, 0);
+
+      const currentMonthSales = currentMonthTotals.reduce(
+        (s, t) => s + (Number(t.items_net ?? t.subtotal_without_vat) || 0),
+        0
+      );
+      const previousMonthSales = previousMonthTotals.reduce(
+        (s, t) => s + (Number(t.items_net ?? t.subtotal_without_vat) || 0),
+        0
+      );
+      const ytdSales = ytdTotals.reduce(
+        (s, t) => s + (Number(t.items_net ?? t.subtotal_without_vat) || 0),
+        0
+      );
 
       const currentMonthProfit = calcProfit(currentMonthTotals);
       const previousMonthProfit = calcProfit(previousMonthTotals);
@@ -172,20 +214,13 @@ export default function ERPPage() {
       const previousMonthProfitability = previousMonthSales > 0 ? (previousMonthProfit / previousMonthSales) * 100 : 0;
       const ytdProfitability = ytdSales > 0 ? (ytdProfit / ytdSales) * 100 : 0;
 
-      // Lista zamówień z rentownością (PLN, kurs 4.1)
-      const transportByOrder = new Map<string, number>();
-      const logisticsByOrder = new Map<string, number>();
-      (ordersWithCosts || []).forEach((o: any) => {
-        transportByOrder.set(o.id, Number(o.transport_cost_pln) || 0);
-        logisticsByOrder.set(o.id, Number(o.logistics_cost) || 0);
-      });
+      // Lista zamówień — zakup z order_items (brutto→netto), dostawa = koszty uboczne PL + IE
       const ordersList: ERPOrderRow[] = currentMonthTotals.map((t: any) => {
-        const valueNetEUR = Number(t.subtotal_without_vat) || 0;
+        const valueNetEUR = Number(t.items_net ?? t.subtotal_without_vat) || 0;
         const valueNetPLN = valueNetEUR * EXCHANGE_RATE;
-        const purchaseCostPLN = supplierCostPLNByOrder.get(t.order_id) || 0;
-        const deliveryCostPLN = transportByOrder.get(t.order_id) || 0;
-        const logisticsPLN = (logisticsByOrder.get(t.order_id) || 0) * EXCHANGE_RATE;
-        const totalCostPLN = purchaseCostPLN + deliveryCostPLN + logisticsPLN;
+        const purchaseCostPLN = purchaseNetPlnByOrder.get(t.order_id) || 0;
+        const deliveryCostPLN = deliveryPlnByOrder.get(t.order_id) || 0;
+        const totalCostPLN = purchaseCostPLN + deliveryCostPLN;
         const profitPLN = valueNetPLN - totalCostPLN;
         const profitability = valueNetPLN > 0 ? (profitPLN / valueNetPLN) * 100 : 0;
         const d = t.submitted_at || t.created_at;
@@ -660,7 +695,9 @@ export default function ERPPage() {
             <CardHeader>
               <CardTitle>Lista zamówień - {getMonthName(selectedMonth)} {selectedYear}</CardTitle>
               <p className="text-sm text-muted-foreground">
-                Wartości netto w PLN (kurs 1 EUR = {EXCHANGE_RATE} zł). Koszt dostawy można dodać w szczegółach zamówienia.
+                Wartości netto w PLN (kurs 1 EUR = {EXCHANGE_RATE} zł). Koszt zakupu = cena
+                koszyka brutto ÷ 1,23. Koszt dostawy = koszty uboczne PL + dostawa IE
+                (Logistyka).
               </p>
             </CardHeader>
             <CardContent>
