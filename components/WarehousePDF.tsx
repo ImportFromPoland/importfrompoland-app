@@ -1,23 +1,6 @@
 import React from 'react';
-import { Document, Page, Text, View, StyleSheet, Font } from '@react-pdf/renderer';
-
-// Register Roboto font with full Unicode support for Polish characters
-// Using CDN that supports CORS and has proper Unicode support
-Font.register({
-  family: 'Roboto',
-  fonts: [
-    {
-      src: 'https://cdnjs.cloudflare.com/ajax/libs/ink/3.1.10/fonts/Roboto/roboto-light-webfont.ttf',
-    },
-    {
-      src: 'https://cdnjs.cloudflare.com/ajax/libs/ink/3.1.10/fonts/Roboto/roboto-bold-webfont.ttf',
-      fontWeight: 'bold',
-    },
-  ],
-});
-
-// Alternative: Use system fonts that support Unicode
-// If Roboto fails, Helvetica should work as it has Unicode support in react-pdf
+import { Document, Page, Text, View, StyleSheet } from '@react-pdf/renderer';
+import '@/lib/pdf-fonts';
 
 // PDF Styles
 const styles = StyleSheet.create({

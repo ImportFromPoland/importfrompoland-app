@@ -150,7 +150,7 @@ export default function AdminOfferDetailPage() {
       const { data: offerData, error } = await supabase
         .from("individual_offers")
         .select(
-          "*, company:companies(*), client:profiles!client_profile_id(full_name, email, phone, email_is_placeholder)"
+          "*, company:companies(*), client:profiles!client_profile_id(full_name, email, phone, email_is_placeholder, role)"
         )
         .eq("id", params.id)
         .single();
@@ -300,7 +300,77 @@ export default function AdminOfferDetailPage() {
         const { OrderPDF } = await import("@/components/OrderPDF");
         const React = await import("react");
 
+        let customerProfile =
+          offer.client?.role === "client"
+            ? {
+                full_name: offer.client.full_name || offer.guest_name,
+                email: offer.guest_email || offer.client.email,
+                phone: offer.client.phone || offer.guest_phone,
+                email_is_placeholder: offer.client.email_is_placeholder,
+                role: "client" as const,
+              }
+            : null;
+
+        if (!customerProfile && offer.company_id) {
+          const { data: companyClient } = await supabase
+            .from("profiles")
+            .select("full_name, email, phone, email_is_placeholder, role")
+            .eq("company_id", offer.company_id)
+            .eq("role", "client")
+            .order("created_at", { ascending: true })
+            .limit(1)
+            .maybeSingle();
+          if (companyClient) {
+            customerProfile = {
+              full_name: companyClient.full_name || offer.guest_name,
+              email: offer.guest_email || companyClient.email,
+              phone: companyClient.phone || offer.guest_phone,
+              email_is_placeholder: companyClient.email_is_placeholder,
+              role: "client",
+            };
+          }
+        }
+
+        if (!customerProfile) {
+          customerProfile = {
+            full_name: offer.guest_name,
+            email: offer.guest_email,
+            phone: offer.guest_phone,
+            role: "client",
+          };
+        }
+
         const vatRate = 23;
+        let discountPercent = Number(
+          (displayVersion as any).discount_percent || 0
+        );
+        let discountAmount = Number(
+          (displayVersion as any).discount_amount || 0
+        );
+        let discountType =
+          (displayVersion as any).discount_type === "amount"
+            ? "amount"
+            : "percent";
+
+        // Fallback for older offers: read discount from source basket/order
+        if (
+          discountPercent === 0 &&
+          discountAmount === 0 &&
+          offer.source_order_id
+        ) {
+          const { data: sourceOrder } = await supabase
+            .from("orders")
+            .select("discount_percent, discount_amount, discount_type")
+            .eq("id", offer.source_order_id)
+            .maybeSingle();
+          if (sourceOrder) {
+            discountPercent = Number(sourceOrder.discount_percent || 0);
+            discountAmount = Number(sourceOrder.discount_amount || 0);
+            discountType =
+              sourceOrder.discount_type === "amount" ? "amount" : "percent";
+          }
+        }
+
         const orderLike = {
           number: offer.offer_number,
           offer_number: offer.offer_number,
@@ -308,7 +378,9 @@ export default function AdminOfferDetailPage() {
           status: "offer",
           currency: "EUR",
           vat_rate: vatRate,
-          discount_percent: 0,
+          discount_percent: discountPercent,
+          discount_amount: discountAmount,
+          discount_type: discountType,
           shipping_cost: 0,
           payment_link_url: displayVersion.payment_link_url,
           prefers_bank_transfer: false,
@@ -340,15 +412,17 @@ export default function AdminOfferDetailPage() {
           };
         });
 
-        const itemsNet = displayLines.reduce(
+        const itemsNetBefore = displayLines.reduce(
           (sum: number, line: any) => sum + Number(line.amount || 0),
           0
         );
-        const vatAmount = displayLines.reduce((sum: number, line: any) => {
-          const net = Number(line.amount || 0);
-          const rate = Number(line.vat_rate ?? vatRate);
-          return sum + (net * rate) / 100;
-        }, 0);
+        const discountNet =
+          discountType === "amount"
+            ? discountAmount
+            : (itemsNetBefore * discountPercent) / 100;
+        const itemsNetAfter = Math.max(0, itemsNetBefore - discountNet);
+        const vatAmount = (itemsNetAfter * vatRate) / 100;
+        const grandTotal = itemsNetAfter + vatAmount;
 
         const blob = await pdf(
           React.createElement(OrderPDF, {
@@ -368,16 +442,17 @@ export default function AdminOfferDetailPage() {
             },
             items,
             totals: {
-              items_net: itemsNet,
+              items_net_before_header: itemsNetBefore,
+              header_discount_amt: discountNet,
+              header_discount_percent: discountPercent,
+              header_discount_amount: discountAmount,
+              header_discount_type: discountType,
+              items_net: itemsNetAfter,
               vat_amount: vatAmount,
-              grand_total: itemsNet + vatAmount,
+              grand_total: grandTotal,
               shipping_cost: 0,
             },
-            createdByProfile: {
-              full_name: offer.client?.full_name || offer.guest_name,
-              email: offer.guest_email || offer.client?.email,
-              phone: offer.client?.phone || offer.guest_phone,
-            },
+            customerProfile,
             documentKind: "offer",
           }) as any
         ).toBlob();

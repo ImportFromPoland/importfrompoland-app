@@ -9,6 +9,8 @@ import {
   Link,
 } from "@react-pdf/renderer";
 import "@/lib/pdf-open-links-new-window";
+import "@/lib/pdf-fonts";
+import { buildPdfCustomer, type PdfCustomerProfile } from "@/lib/pdf-customer";
 import { orderLineGrossEURDisplay, orderLineUnitGrossEURDisplay } from "@/lib/utils";
 
 const RED = "#E94444";
@@ -23,7 +25,7 @@ const styles = StyleSheet.create({
     paddingBottom: 56,
     paddingHorizontal: 36,
     fontSize: 9,
-    fontFamily: "Helvetica",
+    fontFamily: "Roboto",
     backgroundColor: "#ffffff",
     color: TEXT,
   },
@@ -306,7 +308,10 @@ interface OrderPDFProps {
   company: any;
   items: any[];
   totals: any;
-  createdByProfile?: any;
+  /** @deprecated Prefer customerProfile — creator is often an admin */
+  createdByProfile?: PdfCustomerProfile | null;
+  /** Client the document is for (not the admin who created it) */
+  customerProfile?: PdfCustomerProfile | null;
   /** When set, renders as Offer document instead of Order Confirmation */
   documentKind?: "order" | "offer";
 }
@@ -317,6 +322,7 @@ export const OrderPDF: React.FC<OrderPDFProps> = ({
   items,
   totals,
   createdByProfile,
+  customerProfile,
   documentKind = "order",
 }) => {
   const isOffer = documentKind === "offer";
@@ -337,22 +343,14 @@ export const OrderPDF: React.FC<OrderPDFProps> = ({
     });
   };
 
-  const customerName =
-    createdByProfile?.full_name ||
-    company?.name ||
-    "—";
-  const customerEmail =
-    createdByProfile?.email &&
-    !String(createdByProfile.email).endsWith("@placeholder.ifp.local")
-      ? createdByProfile.email
-      : company?.email || null;
-
-  const addressParts = [
-    company?.address_line1,
-    company?.address_line2,
-    [company?.city, company?.postal_code].filter(Boolean).join(", "),
-    company?.country,
-  ].filter(Boolean);
+  const customer = buildPdfCustomer({
+    company,
+    customerProfile:
+      customerProfile ||
+      (createdByProfile?.role && createdByProfile.role !== "client"
+        ? null
+        : createdByProfile),
+  });
 
   const docNumber = isOffer
     ? order.offer_number || order.number
@@ -364,19 +362,51 @@ export const OrderPDF: React.FC<OrderPDFProps> = ({
     ? "OFFER"
     : String(order.status || "").toUpperCase();
 
-  const subtotal =
-    totals?.items_net ??
-    totals?.subtotal_without_vat ??
-    totals?.items_net_before_header ??
-    0;
-  const vatAmount = totals?.vat_amount ?? 0;
-  const grandTotal = totals?.grand_total ?? 0;
-  const headerDiscount =
-    totals?.header_discount_amt ??
-    ((order.discount_percent || 0) > 0
-      ? (totals?.items_net_before_header || subtotal) *
-        ((order.discount_percent || 0) / 100)
-      : 0);
+  const vatRate = Number(order.vat_rate ?? 23);
+  const baseNet =
+    Number(
+      totals?.items_net_before_header ??
+        totals?.items_net ??
+        totals?.subtotal_without_vat ??
+        0
+    ) || 0;
+
+  const discountType =
+    order.discount_type || totals?.header_discount_type || "percent";
+  const discountPercent = Number(
+    order.discount_percent ?? totals?.header_discount_percent ?? 0
+  );
+  const discountAmountFixed = Number(
+    order.discount_amount ?? totals?.header_discount_amount ?? 0
+  );
+
+  let discountNet = Number(totals?.header_discount_amt ?? 0);
+  if (!discountNet) {
+    discountNet =
+      discountType === "amount"
+        ? discountAmountFixed
+        : (baseNet * discountPercent) / 100;
+  }
+
+  // If totals.items_net is already after discount but items_net_before_header missing,
+  // reconstruct base from net after + discount
+  const netAfterDiscount =
+    totals?.items_net_before_header != null
+      ? Number(totals.items_net ?? baseNet - discountNet)
+      : Number(totals?.items_net ?? baseNet);
+  const resolvedBaseNet =
+    totals?.items_net_before_header != null
+      ? baseNet
+      : discountNet > 0
+        ? netAfterDiscount + discountNet
+        : baseNet;
+
+  const baseGross = resolvedBaseNet * (1 + vatRate / 100);
+  const discountGross = discountNet * (1 + vatRate / 100);
+  const vatAmount = Number(totals?.vat_amount ?? netAfterDiscount * (vatRate / 100));
+  const grandTotal = Number(totals?.grand_total ?? 0);
+  const shipping = Number(totals?.shipping_cost || order.shipping_cost || 0);
+  const showDiscount = discountNet > 0.005;
 
   // Bank details always; PAY CTA only when admin set a payment link
   const showPayButton = Boolean(order.payment_link_url);
@@ -436,23 +466,24 @@ export const OrderPDF: React.FC<OrderPDFProps> = ({
           <View style={styles.card}>
             <Text style={styles.cardTitle}>Customer</Text>
             <Text style={[styles.cardLine, { fontWeight: "bold" }]}>
-              {customerName}
+              {customer.displayName}
             </Text>
-            {customerEmail && (
-              <Text style={styles.cardLine}>{customerEmail}</Text>
+            {customer.contactName && (
+              <Text style={styles.cardLine}>{customer.contactName}</Text>
             )}
-            {company?.vat_number && (
-              <Text style={styles.cardMuted}>VAT: {company.vat_number}</Text>
+            {customer.email && (
+              <Text style={styles.cardLine}>{customer.email}</Text>
             )}
-            {addressParts.map((line, i) => (
+            {customer.vatNumber && (
+              <Text style={styles.cardMuted}>VAT: {customer.vatNumber}</Text>
+            )}
+            {customer.addressParts.map((line, i) => (
               <Text key={i} style={styles.cardMuted}>
                 {line}
               </Text>
             ))}
-            {(company?.phone || createdByProfile?.phone) && (
-              <Text style={styles.cardMuted}>
-                {company?.phone || createdByProfile?.phone}
-              </Text>
+            {customer.phone && (
+              <Text style={styles.cardMuted}>{customer.phone}</Text>
             )}
           </View>
         </View>
@@ -523,32 +554,40 @@ export const OrderPDF: React.FC<OrderPDFProps> = ({
 
         <View style={styles.totalsWrap} wrap={false}>
           <View style={styles.totalRow}>
-            <Text style={styles.totalLabel}>Subtotal excl. VAT</Text>
-            <Text style={styles.totalValue}>{formatCurrency(subtotal)}</Text>
+            <Text style={styles.totalLabel}>Base total (excl. VAT)</Text>
+            <Text style={styles.totalValue}>
+              {formatCurrency(resolvedBaseNet)}
+            </Text>
           </View>
-          {headerDiscount > 0 && (
+          <View style={styles.totalRow}>
+            <Text style={styles.totalLabel}>Base total (incl. VAT)</Text>
+            <Text style={styles.totalValue}>{formatCurrency(baseGross)}</Text>
+          </View>
+          {showDiscount && (
             <View style={styles.totalRow}>
-              <Text style={styles.totalLabel}>
+              <Text style={[styles.totalLabel, { color: "#1a7a3a" }]}>
                 Discount
-                {order.discount_percent ? ` (${order.discount_percent}%)` : ""}
+                {discountType === "percent" && discountPercent > 0
+                  ? ` (${discountPercent}%)`
+                  : ""}
+                {" "}
+                (incl. VAT)
               </Text>
-              <Text style={styles.totalValue}>
-                −{formatCurrency(headerDiscount)}
+              <Text style={[styles.totalValue, { color: "#1a7a3a" }]}>
+                −{formatCurrency(discountGross)}
               </Text>
             </View>
           )}
-          {(order.vat_rate || 0) > 0 && (
+          {vatRate > 0 && (
             <View style={styles.totalRow}>
-              <Text style={styles.totalLabel}>VAT ({order.vat_rate}%)</Text>
+              <Text style={styles.totalLabel}>VAT ({vatRate}%)</Text>
               <Text style={styles.totalValue}>{formatCurrency(vatAmount)}</Text>
             </View>
           )}
-          {(totals?.shipping_cost || order.shipping_cost || 0) > 0 && (
+          {shipping > 0 && (
             <View style={styles.totalRow}>
               <Text style={styles.totalLabel}>Shipping</Text>
-              <Text style={styles.totalValue}>
-                {formatCurrency(totals?.shipping_cost || order.shipping_cost)}
-              </Text>
+              <Text style={styles.totalValue}>{formatCurrency(shipping)}</Text>
             </View>
           )}
           <View style={styles.grandRow}>

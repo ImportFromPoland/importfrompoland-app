@@ -9,6 +9,7 @@ import {
   Link,
 } from "@react-pdf/renderer";
 import "@/lib/pdf-open-links-new-window";
+import "@/lib/pdf-fonts";
 import {
   offerLineGrossAmount,
   offerLineNetAmount,
@@ -33,7 +34,7 @@ const COLORS = {
 
 const styles = StyleSheet.create({
   page: {
-    fontFamily: "Helvetica",
+    fontFamily: "Roboto",
     fontSize: 9,
     color: COLORS.text,
     backgroundColor: COLORS.bg,

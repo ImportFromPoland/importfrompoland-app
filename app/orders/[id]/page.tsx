@@ -61,7 +61,7 @@ export default function OrderDetailPage() {
         .select(`
           *,
           company:companies(*),
-          created_by_profile:profiles!created_by(full_name, email),
+          created_by_profile:profiles!created_by(full_name, email, phone, role, email_is_placeholder),
           items:order_items(*),
           invoices(*),
           shipments(*)
@@ -338,7 +338,7 @@ export default function OrderDetailPage() {
           company: order.company,
           items: order.items,
           totals,
-          createdByProfile: order.created_by_profile,
+          customerProfile: order.created_by_profile,
         }) as any
       ).toBlob();
 

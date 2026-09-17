@@ -45,6 +45,10 @@ export default function AdminOrderDetailPage() {
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const [isStaffAdmin, setIsStaffAdmin] = useState(false);
   const [creatingOffer, setCreatingOffer] = useState(false);
+  const [linkedOffer, setLinkedOffer] = useState<{
+    id: string;
+    offer_number: string;
+  } | null>(null);
 
   useEffect(() => {
     loadData();
@@ -73,7 +77,7 @@ export default function AdminOrderDetailPage() {
         .select(`
           *,
           company:companies(*),
-          created_by_profile:profiles!created_by(full_name, email),
+          created_by_profile:profiles!created_by(full_name, email, phone, role, email_is_placeholder),
           items:order_items(*),
           invoices(*),
           shipments(*)
@@ -101,6 +105,16 @@ export default function AdminOrderDetailPage() {
         .single();
 
       setTotals(totalsData);
+
+      const { data: offerForBasket } = await supabase
+        .from("individual_offers")
+        .select("id, offer_number")
+        .eq("source_order_id", params.id)
+        .eq("offer_kind", "basket")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      setLinkedOffer(offerForBasket || null);
     } catch (error) {
       console.error("Error loading order:", error);
     } finally {
@@ -369,11 +383,12 @@ export default function AdminOrderDetailPage() {
       alert("Add items before creating an offer.");
       return;
     }
-    if (
-      !confirm(
-        "Create an Offer from this basket? The offer will appear under Oferty with a new offer number. The basket itself will not become an order."
-      )
-    ) {
+
+    const confirmMsg = linkedOffer
+      ? `Update offer ${linkedOffer.offer_number} with a new version from this basket? Previous version will be superseded (same offer number).`
+      : "Create an Offer from this basket? The offer will appear under Oferty with a new offer number. The basket itself will not become an order.";
+
+    if (!confirm(confirmMsg)) {
       return;
     }
 
@@ -386,6 +401,10 @@ export default function AdminOrderDetailPage() {
       });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || "Failed to create offer");
+
+      if (result.offer_id && result.offer_number) {
+        setLinkedOffer({ id: result.offer_id, offer_number: result.offer_number });
+      }
 
       alert(result.message || "Offer created");
       router.push(`/admin/offers/${result.offer_id}`);
@@ -531,6 +550,22 @@ export default function AdminOrderDetailPage() {
       const { OrderPDF } = await import('@/components/OrderPDF');
       const React = await import('react');
 
+      let customerProfile = order.created_by_profile?.role === "client"
+        ? order.created_by_profile
+        : null;
+
+      if (!customerProfile && order.company_id) {
+        const { data: companyClient } = await supabase
+          .from("profiles")
+          .select("full_name, email, phone, role, email_is_placeholder")
+          .eq("company_id", order.company_id)
+          .eq("role", "client")
+          .order("created_at", { ascending: true })
+          .limit(1)
+          .maybeSingle();
+        customerProfile = companyClient;
+      }
+
       // Generate PDF
       const blob = await pdf(
         React.createElement(OrderPDF, {
@@ -538,7 +573,7 @@ export default function AdminOrderDetailPage() {
           company: order.company,
           items,
           totals,
-          createdByProfile: order.created_by_profile,
+          customerProfile,
         }) as any
       ).toBlob();
 
@@ -620,7 +655,13 @@ export default function AdminOrderDetailPage() {
               className="border-primary/40 text-primary hover:bg-primary/5"
             >
               <FilePlus2 className="h-4 w-4 mr-2" />
-              {creatingOffer ? "Creating offer…" : "Create Offer"}
+              {creatingOffer
+                ? linkedOffer
+                  ? "Updating offer…"
+                  : "Creating offer…"
+                : linkedOffer
+                  ? "Update Offer"
+                  : "Create Offer"}
             </Button>
           )}
           
