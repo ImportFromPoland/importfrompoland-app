@@ -18,7 +18,7 @@ import { formatCurrency } from "@/lib/utils";
 import { StatusBadge } from "@/components/StatusBadge";
 import { TrendingUp, TrendingDown, DollarSign, Percent, Calendar, List, BarChart3, ExternalLink } from "lucide-react";
 
-const EXCHANGE_RATE = 4.1;
+const EXCHANGE_RATE = 4.2;
 
 interface ERPOrderRow {
   orderId: string;

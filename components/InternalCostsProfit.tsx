@@ -53,38 +53,40 @@ export default function InternalCostsProfit({ isSuperAdmin }: InternalCostsProfi
           id,
           created_at,
           status,
-          totals:order_totals(grand_total, subtotal_without_vat, vat_amount)
+          ie_delivery_cost_eur,
+          totals:order_totals(grand_total, subtotal_without_vat, items_net, vat_amount),
+          items:order_items(net_cost_pln, quantity),
+          side_costs:order_side_costs(amount_gross_pln)
         `)
         .gte("created_at", startDate)
         .lt("created_at", endDate)
         .neq("status", "draft")
         .neq("status", "cancelled");
 
-      // Get supplier orders from the selected month
-      const { data: supplierOrders } = await supabase
-        .from("supplier_orders")
-        .select("total_cost_pln, created_at")
-        .gte("created_at", startDate)
-        .lt("created_at", endDate);
-
-      // Calculate revenue (from confirmed orders)
       const confirmedOrders = orders?.filter(order => 
         ["confirmed", "paid", "partially_packed", "packed", "partially_dispatched", "dispatched", "partially_delivered", "delivered"].includes(order.status)
       ) || [];
 
-      const totalRevenue = confirmedOrders.reduce((sum, order) => {
-        return sum + (order.totals?.grand_total || 0);
-      }, 0);
+      // Revenue = net (excl VAT). Costs = purchase+side gross/1.23 / 4.2 + IE EUR
+      const exchangeRate = 4.2;
+      let totalRevenue = 0;
+      let totalCosts = 0;
 
-      // Calculate costs (from supplier orders)
-      const totalCostsPLN = supplierOrders?.reduce((sum, order) => {
-        return sum + (order.total_cost_pln || 0);
-      }, 0) || 0;
+      for (const order of confirmedOrders) {
+        const t = Array.isArray(order.totals) ? order.totals[0] : order.totals;
+        totalRevenue += Number(t?.items_net ?? t?.subtotal_without_vat ?? 0);
 
-      // Convert PLN to EUR using exchange rate for the month
-      // For now, use 4.2 as the profitability rate (this should be fetched from exchange_rates table)
-      const exchangeRate = 4.2; // TODO: Fetch from exchange_rates table based on order date
-      const totalCosts = totalCostsPLN / exchangeRate;
+        const purchaseGross = (order.items || []).reduce(
+          (s: number, i: any) => s + (Number(i.net_cost_pln) || 0) * (Number(i.quantity) || 0),
+          0
+        );
+        const sideGross = (order.side_costs || []).reduce(
+          (s: number, c: any) => s + (Number(c.amount_gross_pln) || 0),
+          0
+        );
+        totalCosts += (purchaseGross + sideGross) / 1.23 / exchangeRate;
+        totalCosts += Number(order.ie_delivery_cost_eur) || 0;
+      }
 
       const netProfit = totalRevenue - totalCosts;
       const profitMargin = totalRevenue > 0 ? (netProfit / totalRevenue) * 100 : 0;

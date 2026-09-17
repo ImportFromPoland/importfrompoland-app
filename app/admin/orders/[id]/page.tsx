@@ -12,7 +12,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatusBadge } from "@/components/StatusBadge";
 import { formatDate, formatCurrency, orderLineGrossEURDisplay } from "@/lib/utils";
 import { TotalsPanel } from "@/components/TotalsPanel";
-import { PLN_TO_EUR_RATE, EUR_TO_PLN_DIVISOR } from "@/lib/constants";
+import { PLN_TO_EUR_RATE } from "@/lib/constants";
+import {
+  calculateOrderProfitability,
+  defaultGrossCostFromBasket,
+} from "@/lib/profitability";
+import { fetchProfitabilityEurPlnRate } from "@/lib/profitability-rate";
 import {
   Table,
   TableBody,
@@ -49,6 +54,10 @@ export default function AdminOrderDetailPage() {
     id: string;
     offer_number: string;
   } | null>(null);
+  const [sideCosts, setSideCosts] = useState<
+    Array<{ id: string; label: string; amount_gross_pln: number }>
+  >([]);
+  const [eurPlnRate, setEurPlnRate] = useState(4.2);
 
   useEffect(() => {
     loadData();
@@ -95,7 +104,22 @@ export default function AdminOrderDetailPage() {
       const sortedItems = (orderData.items || []).sort((a: any, b: any) => 
         (a.line_number || 0) - (b.line_number || 0)
       );
-      setItems(sortedItems);
+
+      // Auto-fill empty purchase cost from basket PLN (gross)
+      const filledItems = [];
+      for (const item of sortedItems) {
+        const gross = defaultGrossCostFromBasket(item);
+        if (!(Number(item.net_cost_pln) > 0) && gross > 0) {
+          await supabase
+            .from("order_items")
+            .update({ net_cost_pln: gross })
+            .eq("id", item.id);
+          filledItems.push({ ...item, net_cost_pln: gross });
+        } else {
+          filledItems.push(item);
+        }
+      }
+      setItems(filledItems);
 
       // Get order totals
       const { data: totalsData } = await supabase
@@ -115,6 +139,15 @@ export default function AdminOrderDetailPage() {
         .limit(1)
         .maybeSingle();
       setLinkedOffer(offerForBasket || null);
+
+      const { data: costs } = await supabase
+        .from("order_side_costs")
+        .select("id, label, amount_gross_pln")
+        .eq("order_id", params.id)
+        .order("created_at", { ascending: true });
+      setSideCosts(costs || []);
+
+      setEurPlnRate(await fetchProfitabilityEurPlnRate(supabase));
     } catch (error) {
       console.error("Error loading order:", error);
     } finally {
@@ -745,7 +778,7 @@ export default function AdminOrderDetailPage() {
                       {["confirmed", "partially_received", "ready_to_ship", "shipped"].includes(order.status) && (
                         <>
                           <TableHead>Actual Supplier</TableHead>
-                          <TableHead className="text-right">Net Cost (PLN)</TableHead>
+                          <TableHead className="text-right">Koszt brutto (PLN)</TableHead>
                           <TableHead className="text-right">Logistics (PLN)</TableHead>
                           <TableHead className="text-center">Received</TableHead>
                         </>
@@ -1211,127 +1244,110 @@ export default function AdminOrderDetailPage() {
               </div>
 
               <div className="space-y-2">
-                <Label>Transport Cost (PLN Net)</Label>
+                <Label>Koszt dostawy do IE (EUR)</Label>
                 <Input
                   type="number"
                   step="0.01"
-                  value={order.transport_cost_pln || 0}
+                  value={order.ie_delivery_cost_eur || 0}
                   onChange={(e) =>
-                    setOrder({ ...order, transport_cost_pln: parseFloat(e.target.value) || 0 })
+                    setOrder({
+                      ...order,
+                      ie_delivery_cost_eur: parseFloat(e.target.value) || 0,
+                    })
                   }
                   onBlur={(e) =>
-                    updateOrderHeader("transport_cost_pln", parseFloat(e.target.value) || 0)
+                    updateOrderHeader(
+                      "ie_delivery_cost_eur",
+                      parseFloat(e.target.value) || 0
+                    )
                   }
                 />
                 <p className="text-xs text-muted-foreground">
-                  Internal cost for profitability calculations (not visible to client)
+                  Można też uzupełnić później w zakładce Logistyka.
                 </p>
               </div>
             </CardContent>
           </Card>
 
-          {/* Internal Costs & Profitability (Admin Only) - widoczne od confirmed do delivered, żeby dodać koszt dostawy po kompletacji */}
           {["confirmed", "paid", "partially_packed", "packed", "partially_dispatched", "dispatched", "partially_delivered", "delivered"].includes(order.status) && (
             <Card className="border-orange-200 bg-orange-50">
               <CardHeader>
-                <CardTitle className="text-orange-900">Internal Costs & Profitability</CardTitle>
-                <p className="text-xs text-orange-700">Not visible to client</p>
+                <CardTitle className="text-orange-900">
+                  Rentowność (netto)
+                </CardTitle>
+                <p className="text-xs text-orange-700">
+                  Zakupy brutto ÷ 1,23 · kurs 1 EUR = {eurPlnRate} PLN · bez VAT sprzedaży
+                </p>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label>Overall Logistics Cost (EUR)</Label>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    value={order.logistics_cost || 0}
-                    onChange={(e) =>
-                      setOrder({ ...order, logistics_cost: parseFloat(e.target.value) || 0 })
-                    }
-                    onBlur={(e) =>
-                      updateOrderHeader("logistics_cost", parseFloat(e.target.value) || 0)
-                    }
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Internal packing, delivery costs, etc.
-                  </p>
-                </div>
-
-                <div className="space-y-2 pt-3 border-t">
-                  <div className="flex justify-between text-sm">
-                    <span>Total Item Cost (PLN):</span>
-                    <span className="font-medium">
-                      {formatCurrency(
-                        items.reduce((sum, item) => sum + ((item.net_cost_pln || 0) * item.quantity), 0),
-                        "PLN"
-                      )}
-                    </span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span>Item Logistics (PLN):</span>
-                    <span className="font-medium">
-                      {formatCurrency(
-                        items.reduce((sum, item) => sum + ((item.logistics_cost_pln || 0) * item.quantity), 0),
-                        "PLN"
-                      )}
-                    </span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span>Total Cost in EUR (@ {EUR_TO_PLN_DIVISOR}):</span>
-                    <span className="font-medium">
-                      {formatCurrency(
-                        items.reduce((sum, item) => sum + ((item.net_cost_pln || 0) * item.quantity) + ((item.logistics_cost_pln || 0) * item.quantity), 0) / EUR_TO_PLN_DIVISOR,
-                        "EUR"
-                      )}
-                    </span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span>Global Logistics (EUR):</span>
-                    <span className="font-medium">
-                      {formatCurrency(order.logistics_cost || 0, "EUR")}
-                    </span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span>Transport Cost (EUR):</span>
-                    <span className="font-medium">
-                      {formatCurrency((order.transport_cost_pln || 0) / 4.2, "EUR")}
-                    </span>
-                  </div>
-                  <div className="flex justify-between text-sm font-semibold border-t pt-2">
-                    <span>Total Costs:</span>
-                    <span>
-                      {formatCurrency(
-                        (items.reduce((sum, item) => sum + ((item.net_cost_pln || 0) * item.quantity) + ((item.logistics_cost_pln || 0) * item.quantity), 0) / 4.2) + (order.logistics_cost || 0) + ((order.transport_cost_pln || 0) / 4.2),
-                        "EUR"
-                      )}
-                    </span>
-                  </div>
-                  <div className="flex justify-between text-sm font-semibold text-orange-900">
-                    <span>Client Pays:</span>
-                    <span>{formatCurrency(((() => {
-                      const calculatedTotals = calculateTotals();
-                      return (calculatedTotals?.grand_total || totals?.grand_total || 0);
-                    })()), order.currency)}</span>
-                  </div>
-                  <div className="flex justify-between text-lg font-bold pt-2 border-t">
-                    <span>Net Profit:</span>
-                    <span className={(() => {
-                      const calculatedTotals = calculateTotals();
-                      const grandTotal = calculatedTotals?.grand_total || totals?.grand_total || 0;
-                      const totalCosts = (items.reduce((sum, item) => sum + ((item.net_cost_pln || 0) * item.quantity) + ((item.logistics_cost_pln || 0) * item.quantity), 0) / 4.2) + (order.logistics_cost || 0) + ((order.transport_cost_pln || 0) / 4.2);
-                      return (grandTotal - totalCosts) >= 0 ? "text-green-600" : "text-red-600";
-                    })()}>
-                      {formatCurrency(
-                        (() => {
-                          const calculatedTotals = calculateTotals();
-                          const grandTotal = calculatedTotals?.grand_total || totals?.grand_total || 0;
-                          const totalCosts = (items.reduce((sum, item) => sum + ((item.net_cost_pln || 0) * item.quantity) + ((item.logistics_cost_pln || 0) * item.quantity), 0) / 4.2) + (order.logistics_cost || 0) + ((order.transport_cost_pln || 0) / 4.2);
-                          return grandTotal - totalCosts;
-                        })(),
-                        "EUR"
-                      )}
-                    </span>
-                  </div>
-                </div>
+                {(() => {
+                  const calculatedTotals = calculateTotals();
+                  const revenueNetEur =
+                    calculatedTotals?.items_net ??
+                    totals?.items_net ??
+                    totals?.subtotal_without_vat ??
+                    0;
+                  const purchaseGrossPln = items.reduce(
+                    (sum, item) =>
+                      sum +
+                      (Number(item.net_cost_pln) || 0) *
+                        (Number(item.quantity) || 0),
+                    0
+                  );
+                  const sideGross = sideCosts.reduce(
+                    (sum, c) => sum + (Number(c.amount_gross_pln) || 0),
+                    0
+                  );
+                  const p = calculateOrderProfitability({
+                    revenueNetEur,
+                    purchaseGrossPln,
+                    sideCostsGrossPln: sideGross,
+                    ieDeliveryCostEur: order.ie_delivery_cost_eur || 0,
+                    eurPlnRate,
+                  });
+                  return (
+                    <div className="space-y-2">
+                      <div className="flex justify-between text-sm">
+                        <span>Przychód netto (EUR):</span>
+                        <span className="font-medium">{formatCurrency(p.revenueNetEur, "EUR")}</span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span>Zakupy brutto (PLN):</span>
+                        <span className="font-medium">{formatCurrency(purchaseGrossPln, "PLN")}</span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span>Zakupy netto (PLN):</span>
+                        <span className="font-medium">{formatCurrency(p.purchaseNetPln, "PLN")}</span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span>Koszty uboczne PL brutto:</span>
+                        <span className="font-medium">{formatCurrency(sideGross, "PLN")}</span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span>Dostawa IE (EUR):</span>
+                        <span className="font-medium">{formatCurrency(p.ieDeliveryCostEur, "EUR")}</span>
+                      </div>
+                      <div className="flex justify-between text-sm font-semibold border-t pt-2">
+                        <span>Koszty łącznie (EUR):</span>
+                        <span>{formatCurrency(p.totalCostsEur, "EUR")}</span>
+                      </div>
+                      <div className="flex justify-between text-lg font-bold pt-2 border-t">
+                        <span>Zysk netto:</span>
+                        <span className={p.profitEur >= 0 ? "text-green-600" : "text-red-600"}>
+                          {formatCurrency(p.profitEur, "EUR")}
+                          {p.marginPercent != null && (
+                            <span className="text-sm font-normal ml-2">
+                              ({p.marginPercent.toFixed(1)}%)
+                            </span>
+                          )}
+                        </span>
+                      </div>
+                      <p className="text-xs text-muted-foreground pt-1">
+                        Koszty uboczne: Zaopatrzenie. Dostawa IE: Logistyka.
+                      </p>
+                    </div>
+                  );
+                })()}
               </CardContent>
             </Card>
           )}

@@ -13,11 +13,13 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { formatDate, formatCurrency } from "@/lib/utils";
-import { Package, Plus, ShoppingCart, Eye, ExternalLink, Archive } from "lucide-react";
+import { Package, Plus, ShoppingCart, Eye, ExternalLink, Archive, Trash2 } from "lucide-react";
+import { defaultGrossCostFromBasket, grossPlnToNet } from "@/lib/profitability";
 
 interface PaidOrder {
   id: string;
   number: string;
+  status?: string;
   company: { name: string };
   created_by_profile?: { full_name: string; email: string };
   created_at: string;
@@ -66,6 +68,7 @@ export default function ZaopatrzeniePage() {
     quantity: number;
     unit_of_measure: string;
     unit_price: number;
+    currency?: string;
     supplier_name: string;
     original_supplier_name?: string;
     net_cost_pln: number;
@@ -73,6 +76,11 @@ export default function ZaopatrzeniePage() {
     received_in_warehouse?: boolean;
     packed?: boolean;
   }>>([]);
+  const [sideCosts, setSideCosts] = useState<
+    Array<{ id: string; label: string; amount_gross_pln: number }>
+  >([]);
+  const [newSideLabel, setNewSideLabel] = useState("");
+  const [newSideAmount, setNewSideAmount] = useState("");
   const [userRole, setUserRole] = useState<string>("");
 
   const supabase = createClient();
@@ -191,6 +199,8 @@ export default function ZaopatrzeniePage() {
 
   const handleViewOrderDetails = async (order: PaidOrder) => {
     setSelectedOrder(order);
+    setNewSideLabel("");
+    setNewSideAmount("");
     
     try {
       // Load order items with supplier info
@@ -205,6 +215,7 @@ export default function ZaopatrzeniePage() {
           quantity,
           unit_of_measure,
           unit_price,
+          currency,
           supplier_name,
           original_supplier_name,
           net_cost_pln,
@@ -227,6 +238,7 @@ export default function ZaopatrzeniePage() {
             quantity,
             unit_of_measure,
             unit_price,
+            currency,
             supplier_name,
             original_supplier_name,
             net_cost_pln,
@@ -247,16 +259,76 @@ export default function ZaopatrzeniePage() {
         return;
       }
 
-      console.log("Loaded order items:", items);
-      // Add polish_product_name as undefined if not in response
-      const itemsWithPolish = (items || []).map(item => ({
-        ...item,
-        polish_product_name: item.polish_product_name || undefined
-      }));
-      setOrderItems(itemsWithPolish);
+      // Auto-fill empty purchase cost from basket PLN price; persist if needed
+      const normalized = [];
+      for (const item of items || []) {
+        const gross = defaultGrossCostFromBasket(item);
+        if (
+          (!(Number(item.net_cost_pln) > 0)) &&
+          gross > 0 &&
+          (userRole === "admin" || userRole === "staff_admin")
+        ) {
+          await supabase
+            .from("order_items")
+            .update({ net_cost_pln: gross })
+            .eq("id", item.id);
+        }
+        normalized.push({
+          ...item,
+          polish_product_name: item.polish_product_name || undefined,
+          net_cost_pln: Number(item.net_cost_pln) > 0 ? Number(item.net_cost_pln) : gross,
+        });
+      }
+      setOrderItems(normalized);
+
+      const { data: costs } = await supabase
+        .from("order_side_costs")
+        .select("id, label, amount_gross_pln")
+        .eq("order_id", order.id)
+        .order("created_at", { ascending: true });
+      setSideCosts(costs || []);
     } catch (error) {
       console.error("Error in handleViewOrderDetails:", error);
       alert("Error loading order details: " + error);
+    }
+  };
+
+  const handleAddSideCost = async () => {
+    if (!selectedOrder) return;
+    const label = newSideLabel.trim();
+    const amount = parseFloat(newSideAmount);
+    if (!label || !(amount > 0)) {
+      alert("Podaj nazwę kosztu i kwotę brutto PLN.");
+      return;
+    }
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      const { data, error } = await supabase
+        .from("order_side_costs")
+        .insert({
+          order_id: selectedOrder.id,
+          label,
+          amount_gross_pln: amount,
+          created_by: user?.id || null,
+        })
+        .select("id, label, amount_gross_pln")
+        .single();
+      if (error) throw error;
+      setSideCosts((prev) => [...prev, data]);
+      setNewSideLabel("");
+      setNewSideAmount("");
+    } catch (error: any) {
+      alert("Nie udało się dodać kosztu: " + (error.message || error));
+    }
+  };
+
+  const handleDeleteSideCost = async (id: string) => {
+    try {
+      const { error } = await supabase.from("order_side_costs").delete().eq("id", id);
+      if (error) throw error;
+      setSideCosts((prev) => prev.filter((c) => c.id !== id));
+    } catch (error: any) {
+      alert("Nie udało się usunąć kosztu: " + (error.message || error));
     }
   };
 
@@ -673,7 +745,25 @@ export default function ZaopatrzeniePage() {
                 </p>
               </div>
               <div className="flex flex-col gap-2">
-                <div className="flex gap-2">
+                <div className="flex gap-2 flex-wrap justify-end">
+                  {(userRole === "admin" || userRole === "staff_admin") && (
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        document
+                          .getElementById("side-costs-section")
+                          ?.scrollIntoView({ behavior: "smooth" });
+                        (
+                          document.getElementById(
+                            "side-cost-label"
+                          ) as HTMLInputElement | null
+                        )?.focus();
+                      }}
+                    >
+                      <Plus className="h-4 w-4 mr-1" />
+                      Dodaj koszt uboczny
+                    </Button>
+                  )}
                   {selectedOrder.status === "paid" && (
                     <>
                       <Button
@@ -717,7 +807,7 @@ export default function ZaopatrzeniePage() {
                   <TableHead className="text-right">Cena PLN (za szt.)</TableHead>
                   <TableHead className="text-center">Ilość</TableHead>
                   <TableHead>Dostawca</TableHead>
-                  <TableHead className="text-right">Koszt netto PLN (za szt.)</TableHead>
+                  <TableHead className="text-right">Koszt brutto PLN (za szt.)</TableHead>
                   <TableHead className="text-center">Status</TableHead>
                   <TableHead className="text-center">Zamówione</TableHead>
                 </TableRow>
@@ -835,6 +925,78 @@ export default function ZaopatrzeniePage() {
                 ))}
               </TableBody>
             </Table>
+
+            <div id="side-costs-section" className="mt-6 border-t pt-4 space-y-3">
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <h3 className="font-medium">Koszty uboczne (PL)</h3>
+                  <p className="text-xs text-muted-foreground">
+                    Dostawy ze sklepów i inne koszty brutto PLN — do rentowności liczone jako netto (÷1,23).
+                  </p>
+                </div>
+              </div>
+
+              {sideCosts.length > 0 && (
+                <div className="space-y-2">
+                  {sideCosts.map((cost) => (
+                    <div
+                      key={cost.id}
+                      className="flex items-center justify-between gap-3 text-sm border rounded-md px-3 py-2"
+                    >
+                      <span className="font-medium">{cost.label}</span>
+                      <div className="flex items-center gap-3">
+                        <span>
+                          {formatCurrency(cost.amount_gross_pln, "PLN")} brutto
+                          <span className="text-muted-foreground ml-2">
+                            (netto {formatCurrency(grossPlnToNet(cost.amount_gross_pln), "PLN")})
+                          </span>
+                        </span>
+                        {(userRole === "admin" || userRole === "staff_admin") && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleDeleteSideCost(cost.id)}
+                          >
+                            <Trash2 className="h-4 w-4 text-red-600" />
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {(userRole === "admin" || userRole === "staff_admin") && (
+                <div className="flex flex-wrap items-end gap-2">
+                  <div className="space-y-1">
+                    <Label htmlFor="side-cost-label">Nazwa</Label>
+                    <Input
+                      id="side-cost-label"
+                      value={newSideLabel}
+                      onChange={(e) => setNewSideLabel(e.target.value)}
+                      placeholder="np. Dostawa Castorama"
+                      className="w-56"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="side-cost-amount">Kwota brutto PLN</Label>
+                    <Input
+                      id="side-cost-amount"
+                      type="number"
+                      step="0.01"
+                      value={newSideAmount}
+                      onChange={(e) => setNewSideAmount(e.target.value)}
+                      placeholder="0.00"
+                      className="w-32"
+                    />
+                  </div>
+                  <Button type="button" onClick={handleAddSideCost}>
+                    <Plus className="h-4 w-4 mr-1" />
+                    Dodaj
+                  </Button>
+                </div>
+              )}
+            </div>
         </CardContent>
       </Card>
       )}
