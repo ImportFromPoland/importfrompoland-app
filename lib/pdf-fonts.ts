@@ -8,8 +8,26 @@ export function registerPdfFonts() {
   Font.register({
     family: "Roboto",
     fonts: [
-      { src: "/fonts/Roboto-Regular.ttf", fontWeight: "normal" },
-      { src: "/fonts/Roboto-Bold.ttf", fontWeight: "bold" },
+      {
+        src: "/fonts/Roboto-Regular.ttf",
+        fontWeight: 400,
+        fontStyle: "normal",
+      },
+      {
+        src: "/fonts/Roboto-Bold.ttf",
+        fontWeight: 700,
+        fontStyle: "normal",
+      },
+      {
+        src: "/fonts/Roboto-Italic.ttf",
+        fontWeight: 400,
+        fontStyle: "italic",
+      },
+      {
+        src: "/fonts/Roboto-BoldItalic.ttf",
+        fontWeight: 700,
+        fontStyle: "italic",
+      },
     ],
   });
   registered = true;
