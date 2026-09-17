@@ -28,15 +28,19 @@ type LogisticsRow = {
   company?: { name: string } | null;
 };
 
-const RELEVANT_STATUSES = [
+const RELEVANT_STATUSES = new Set([
   "paid",
+  "confirmed",
   "partially_packed",
   "packed",
   "partially_dispatched",
   "dispatched",
   "partially_delivered",
   "delivered",
-];
+  "partially_received",
+  "ready_to_ship",
+  "shipped",
+]);
 
 export default function LogistykaPage() {
   const supabase = createClient();
@@ -49,6 +53,7 @@ export default function LogistykaPage() {
   const load = async () => {
     setLoading(true);
     try {
+      // Avoid .in(enum values) — production may lack newer enum labels (e.g. partially_packed)
       const { data, error } = await supabase
         .from("orders")
         .select(
@@ -63,12 +68,14 @@ export default function LogistykaPage() {
           company:companies(name)
         `
         )
-        .in("status", RELEVANT_STATUSES)
+        .not("status", "in", "(draft,cancelled,submitted,in_review)")
         .order("created_at", { ascending: false });
 
       if (error) throw error;
 
-      const list = (data || []) as LogisticsRow[];
+      const list = ((data || []) as LogisticsRow[]).filter((r) =>
+        RELEVANT_STATUSES.has(r.status)
+      );
       setRows(list);
       const next: Record<string, string> = {};
       list.forEach((r) => {
