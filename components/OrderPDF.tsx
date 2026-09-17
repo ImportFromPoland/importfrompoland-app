@@ -1,214 +1,304 @@
-import React from 'react';
-import { Document, Page, Text, View, StyleSheet, Image } from '@react-pdf/renderer';
-import { orderLineGrossEURDisplay, orderLineUnitGrossEURDisplay } from '@/lib/utils';
+import React from "react";
+import {
+  Document,
+  Page,
+  Text,
+  View,
+  StyleSheet,
+  Image,
+  Link,
+} from "@react-pdf/renderer";
+import { orderLineGrossEURDisplay, orderLineUnitGrossEURDisplay } from "@/lib/utils";
 
-// PDF Styles
+const RED = "#E94444";
+const TEXT = "#1a1a1a";
+const MUTED = "#6b6b6b";
+const BORDER = "#e8e8e8";
+const CARD_BG = "#fafafa";
+
 const styles = StyleSheet.create({
   page: {
-    padding: 40,
-    fontSize: 10,
-    fontFamily: 'Times-Roman',
-    backgroundColor: '#ffffff',
-  },
-  watermark: {
-    position: 'absolute',
-    top: '50%',
-    left: '50%',
-    transform: 'translate(-50%, -50%)',
-    opacity: 0.05,
-    width: 400,
-    height: 400,
+    paddingTop: 36,
+    paddingBottom: 56,
+    paddingHorizontal: 36,
+    fontSize: 9,
+    fontFamily: "Helvetica",
+    backgroundColor: "#ffffff",
+    color: TEXT,
   },
   header: {
-    marginBottom: 30,
-    borderBottom: '3pt solid #E94444',
-    paddingBottom: 20,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    marginBottom: 18,
+    paddingBottom: 14,
+    borderBottomWidth: 2,
+    borderBottomColor: RED,
   },
-  headerContent: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
+  brandName: {
+    fontSize: 16,
+    fontWeight: "bold",
+    color: RED,
+    marginBottom: 3,
   },
-  headerLeft: {
-    flex: 1,
-  },
-  headerRight: {
-    alignItems: 'flex-end',
+  brandMeta: {
+    fontSize: 8,
+    color: MUTED,
+    marginBottom: 1,
   },
   logo: {
-    width: 120,
-    height: 60,
-    objectFit: 'contain',
+    width: 100,
+    height: 48,
+    objectFit: "contain",
   },
-  companyInfo: {
-    marginTop: 10,
-    fontSize: 9,
-    color: '#666',
+  docTitle: {
+    fontSize: 18,
+    fontWeight: "bold",
+    color: TEXT,
+    letterSpacing: 0.5,
+    marginBottom: 4,
   },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#E94444',
-    marginBottom: 20,
-    marginTop: 20,
-  },
-  section: {
-    marginBottom: 20,
-  },
-  sectionTitle: {
+  orderNumberHero: {
     fontSize: 12,
-    fontWeight: 'bold',
-    marginBottom: 10,
-    color: '#333',
-    borderBottom: '1pt solid #ddd',
-    paddingBottom: 5,
+    fontWeight: "bold",
+    color: RED,
+    marginBottom: 14,
   },
-  row: {
-    flexDirection: 'row',
-    marginBottom: 5,
+  cardsRow: {
+    flexDirection: "row",
+    gap: 10,
+    marginBottom: 16,
   },
-  label: {
-    width: '30%',
-    fontWeight: 'bold',
-    color: '#555',
+  card: {
+    flex: 1,
+    backgroundColor: CARD_BG,
+    borderWidth: 1,
+    borderColor: BORDER,
+    borderRadius: 6,
+    padding: 10,
   },
-  value: {
-    width: '70%',
-    color: '#333',
+  cardTitle: {
+    fontSize: 8,
+    fontWeight: "bold",
+    color: MUTED,
+    textTransform: "uppercase",
+    letterSpacing: 0.6,
+    marginBottom: 6,
   },
-  table: {
-    marginTop: 10,
-    marginBottom: 20,
+  cardLine: {
+    fontSize: 9,
+    color: TEXT,
+    marginBottom: 3,
+    lineHeight: 1.35,
+  },
+  cardMuted: {
+    fontSize: 8,
+    color: MUTED,
+  },
+  sectionLabel: {
+    fontSize: 8,
+    fontWeight: "bold",
+    color: MUTED,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+    marginBottom: 6,
   },
   tableHeader: {
-    flexDirection: 'row',
-    backgroundColor: '#E94444',
-    color: '#fff',
-    padding: 8,
-    fontWeight: 'bold',
-    fontSize: 9,
+    flexDirection: "row",
+    backgroundColor: RED,
+    paddingVertical: 7,
+    paddingHorizontal: 6,
+    borderTopLeftRadius: 4,
+    borderTopRightRadius: 4,
+  },
+  tableHeaderText: {
+    color: "#ffffff",
+    fontSize: 7.5,
+    fontWeight: "bold",
+    textTransform: "uppercase",
   },
   tableRow: {
-    flexDirection: 'row',
-    borderBottom: '1pt solid #eee',
-    padding: 8,
-    fontSize: 9,
+    flexDirection: "row",
+    borderBottomWidth: 1,
+    borderBottomColor: BORDER,
+    borderLeftWidth: 1,
+    borderRightWidth: 1,
+    borderColor: BORDER,
+    paddingVertical: 7,
+    paddingHorizontal: 6,
+    alignItems: "flex-start",
   },
   tableRowAlt: {
-    flexDirection: 'row',
-    borderBottom: '1pt solid #eee',
-    backgroundColor: '#f9f9f9',
-    padding: 8,
+    backgroundColor: "#fcfcfc",
+  },
+  colNum: { width: "5%" },
+  colProduct: { width: "32%", paddingRight: 4 },
+  colSupplier: { width: "14%", paddingRight: 3 },
+  colQty: { width: "9%", textAlign: "right", paddingRight: 4 },
+  colUnit: { width: "8%", textAlign: "center" },
+  colPrice: { width: "12%", textAlign: "right", paddingRight: 4 },
+  colTotal: { width: "12%", textAlign: "right", paddingRight: 4 },
+  colLink: { width: "8%", textAlign: "center" },
+  productName: {
     fontSize: 9,
+    fontWeight: "bold",
+    color: TEXT,
+    marginBottom: 2,
   },
-  col1: { width: '5%' },
-  col2: { width: '30%' },
-  col3: { width: '20%', textAlign: 'center' },
-  col4: { width: '10%' },
-  col5: { width: '12%' },
-  col6: { width: '8%' },
-  col7: { width: '15%', textAlign: 'right' },
-  itemNotes: {
+  productSpec: {
+    fontSize: 7.5,
+    color: MUTED,
+    marginBottom: 2,
+  },
+  productNote: {
+    fontSize: 7,
+    color: "#888",
+    fontStyle: "italic",
+  },
+  cellText: {
     fontSize: 8,
-    color: '#666',
-    fontStyle: 'italic',
-    marginTop: 2,
+    color: TEXT,
   },
-  totalsSection: {
-    marginTop: 20,
-    marginLeft: 'auto',
-    width: '50%',
-    borderTop: '2pt solid #E94444',
-    paddingTop: 10,
+  viewLink: {
+    fontSize: 7.5,
+    fontWeight: "bold",
+    color: RED,
+    textDecoration: "none",
+  },
+  dash: {
+    fontSize: 8,
+    color: "#bbb",
+  },
+  totalsWrap: {
+    marginTop: 14,
+    marginLeft: "auto",
+    width: "42%",
+    backgroundColor: CARD_BG,
+    borderWidth: 1,
+    borderColor: BORDER,
+    borderRadius: 6,
+    padding: 12,
   },
   totalRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    justifyContent: "space-between",
     marginBottom: 5,
-    paddingHorizontal: 10,
   },
   totalLabel: {
-    fontSize: 10,
-    color: '#555',
+    fontSize: 9,
+    color: MUTED,
   },
   totalValue: {
-    fontSize: 10,
-    fontWeight: 'bold',
-    color: '#333',
+    fontSize: 9,
+    color: TEXT,
+    fontWeight: "bold",
   },
-  grandTotal: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 10,
-    paddingTop: 10,
-    borderTop: '1pt solid #ddd',
-    paddingHorizontal: 10,
+  grandRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1.5,
+    borderTopColor: RED,
   },
-  grandTotalLabel: {
+  grandLabel: {
+    fontSize: 11,
+    fontWeight: "bold",
+    color: TEXT,
+  },
+  grandValue: {
     fontSize: 12,
-    fontWeight: 'bold',
-    color: '#E94444',
+    fontWeight: "bold",
+    color: RED,
   },
-  grandTotalValue: {
-    fontSize: 12,
-    fontWeight: 'bold',
-    color: '#E94444',
+  paymentRow: {
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 16,
   },
-  footer: {
-    marginTop: 40,
-    paddingTop: 20,
-    borderTop: '1pt solid #ddd',
-    fontSize: 8,
-    color: '#666',
-  },
-  footerContent: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  footerLeft: {
+  paymentCard: {
     flex: 1,
-    textAlign: 'left',
-  },
-  footerRight: {
-    alignItems: 'center',
-  },
-  footerLogo: {
-    width: 80,
-    height: 40,
-    objectFit: 'contain',
-  },
-  paymentBox: {
-    backgroundColor: '#f5f5f5',
-    padding: 15,
-    marginTop: 20,
-    borderRadius: 5,
-    border: '1pt solid #ddd',
+    borderWidth: 1,
+    borderColor: BORDER,
+    borderRadius: 6,
+    padding: 12,
+    backgroundColor: CARD_BG,
   },
   paymentTitle: {
-    fontSize: 11,
-    fontWeight: 'bold',
+    fontSize: 9,
+    fontWeight: "bold",
+    color: RED,
     marginBottom: 8,
-    color: '#E94444',
+    textTransform: "uppercase",
+    letterSpacing: 0.4,
   },
   paymentDetail: {
-    fontSize: 9,
-    marginBottom: 4,
-    color: '#333',
+    fontSize: 8,
+    color: TEXT,
+    marginBottom: 3,
+    lineHeight: 1.35,
   },
-  notesBox: {
-    backgroundColor: '#f9f9f9',
-    padding: 12,
+  payButton: {
+    marginTop: 10,
+    backgroundColor: RED,
     borderRadius: 5,
-    border: '1pt solid #ddd',
-    marginTop: 8,
+    paddingVertical: 9,
+    paddingHorizontal: 12,
+    alignItems: "center",
   },
-  notesText: {
-    fontSize: 9,
-    color: '#333',
-    lineHeight: 1.4,
+  payButtonText: {
+    color: "#ffffff",
+    fontSize: 10,
+    fontWeight: "bold",
+    textDecoration: "none",
+  },
+  payHint: {
+    fontSize: 7.5,
+    color: MUTED,
+    marginBottom: 4,
+  },
+  footer: {
+    position: "absolute",
+    bottom: 22,
+    left: 36,
+    right: 36,
+    borderTopWidth: 1,
+    borderTopColor: BORDER,
+    paddingTop: 8,
+  },
+  footerTagline: {
+    fontSize: 8,
+    fontWeight: "bold",
+    color: RED,
+    marginBottom: 4,
+  },
+  footerText: {
+    fontSize: 7,
+    color: MUTED,
+    lineHeight: 1.35,
+  },
+  pageNumber: {
+    position: "absolute",
+    bottom: 10,
+    right: 36,
+    fontSize: 7,
+    color: MUTED,
   },
 });
+
+export function formatOrderUnit(unitOfMeasure?: string | null): string {
+  if (!unitOfMeasure) return "—";
+  const u = String(unitOfMeasure).toLowerCase();
+  if (u === "m2" || u === "m²") return "m²";
+  if (u === "unit" || u === "each" || u === "pcs" || u === "pc") return "each";
+  return String(unitOfMeasure);
+}
+
+function formatQty(quantity: number | string | null | undefined): string {
+  const n = Number(quantity);
+  if (!Number.isFinite(n)) return "—";
+  return Number.isInteger(n) ? String(n) : String(n);
+}
 
 interface OrderPDFProps {
   order: any;
@@ -216,332 +306,305 @@ interface OrderPDFProps {
   items: any[];
   totals: any;
   createdByProfile?: any;
+  /** When set, renders as Offer document instead of Order Confirmation */
+  documentKind?: "order" | "offer";
 }
 
-export const OrderPDF: React.FC<OrderPDFProps> = ({ order, company, items, totals, createdByProfile }) => {
-  const formatCurrency = (amount: number, currency: string) => {
-    return new Intl.NumberFormat('en-IE', {
-      style: 'currency',
-      currency: currency,
-    }).format(amount);
-  };
+export const OrderPDF: React.FC<OrderPDFProps> = ({
+  order,
+  company,
+  items,
+  totals,
+  createdByProfile,
+  documentKind = "order",
+}) => {
+  const isOffer = documentKind === "offer";
+  const currency = order.currency || "EUR";
 
-  const formatDate = (date: string) => {
-    return new Date(date).toLocaleDateString('en-IE', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
+  const formatCurrency = (amount: number) =>
+    new Intl.NumberFormat("en-IE", {
+      style: "currency",
+      currency,
+    }).format(amount || 0);
+
+  const formatDate = (date?: string | null) => {
+    if (!date) return "—";
+    return new Date(date).toLocaleDateString("en-IE", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
     });
   };
 
+  const customerName =
+    createdByProfile?.full_name ||
+    company?.name ||
+    "—";
+  const customerEmail =
+    createdByProfile?.email &&
+    !String(createdByProfile.email).endsWith("@placeholder.ifp.local")
+      ? createdByProfile.email
+      : company?.email || null;
+
+  const addressParts = [
+    company?.address_line1,
+    company?.address_line2,
+    [company?.city, company?.postal_code].filter(Boolean).join(", "),
+    company?.country,
+  ].filter(Boolean);
+
+  const docNumber = isOffer
+    ? order.offer_number || order.number
+    : order.number || "—";
+  const docDate = isOffer
+    ? order.offer_date || order.created_at
+    : order.submitted_at || order.confirmed_at || order.created_at;
+  const statusLabel = isOffer
+    ? "OFFER"
+    : String(order.status || "").toUpperCase();
+
+  const subtotal =
+    totals?.items_net ??
+    totals?.subtotal_without_vat ??
+    totals?.items_net_before_header ??
+    0;
+  const vatAmount = totals?.vat_amount ?? 0;
+  const grandTotal = totals?.grand_total ?? 0;
+  const headerDiscount =
+    totals?.header_discount_amt ??
+    ((order.discount_percent || 0) > 0
+      ? (totals?.items_net_before_header || subtotal) *
+        ((order.discount_percent || 0) / 100)
+      : 0);
+
+  // Bank details always; PAY CTA only when admin set a payment link
+  const showPayButton = Boolean(order.payment_link_url);
+  const payHref = order.payment_link_url as string | null;
+
+  const sortedItems = [...(items || [])].sort(
+    (a, b) => (a.line_number || 0) - (b.line_number || 0)
+  );
+
+  const TableHeader = (
+    <View style={styles.tableHeader} fixed>
+      <Text style={[styles.tableHeaderText, styles.colNum]}>#</Text>
+      <Text style={[styles.tableHeaderText, styles.colProduct]}>Product</Text>
+      <Text style={[styles.tableHeaderText, styles.colSupplier]}>Supplier</Text>
+      <Text style={[styles.tableHeaderText, styles.colQty]}>Qty</Text>
+      <Text style={[styles.tableHeaderText, styles.colUnit]}>Unit</Text>
+      <Text style={[styles.tableHeaderText, styles.colPrice]}>Unit price</Text>
+      <Text style={[styles.tableHeaderText, styles.colTotal]}>Total</Text>
+      <Text style={[styles.tableHeaderText, styles.colLink]}>Link</Text>
+    </View>
+  );
+
   return (
     <Document>
-      <Page size="A4" style={styles.page}>
-        {/* Watermark - Logo will be added here */}
-        {/* <Image src="/logo.png" style={styles.watermark} /> */}
-
-        {/* Header with Logo */}
+      <Page size="A4" style={styles.page} wrap>
         <View style={styles.header}>
-          <View style={styles.headerContent}>
-            <View style={styles.headerLeft}>
-              <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#E94444' }}>
-                ImportFromPoland
-              </Text>
-              <Text style={styles.companyInfo}>
-                Your trusted partner for buying from Poland
-              </Text>
-              <Text style={styles.companyInfo}>
-                Email: info@importfrompoland.com | Phone: +48 791 350 527
-              </Text>
-            </View>
-            <View style={styles.headerRight}>
-              <Image src="/logo.png" style={styles.logo} alt="Company Logo" />
-            </View>
+          <View>
+            <Text style={styles.brandName}>ImportFromPoland</Text>
+            <Text style={styles.brandMeta}>
+              info@importfrompoland.com · +48 791 350 527
+            </Text>
+            <Text style={styles.brandMeta}>importfrompoland.com</Text>
           </View>
+          <Image src="/logo.png" style={styles.logo} />
         </View>
 
-        {/* Document Title */}
-        <Text style={styles.title}>ORDER CONFIRMATION</Text>
+        <Text style={styles.docTitle}>
+          {isOffer ? "OFFER" : "ORDER CONFIRMATION"}
+        </Text>
+        <Text style={styles.orderNumberHero}>
+          {isOffer ? "Offer" : "Order"} {docNumber}
+        </Text>
 
-        {/* Order Information */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Order Information</Text>
-          <View style={styles.row}>
-            <Text style={styles.label}>Order Number:</Text>
-            <Text style={styles.value}>{order.number}</Text>
-          </View>
-          <View style={styles.row}>
-            <Text style={styles.label}>Order Date:</Text>
-            <Text style={styles.value}>
-              {formatDate(order.submitted_at || order.created_at)}
+        <View style={styles.cardsRow}>
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>
+              {isOffer ? "Offer information" : "Order information"}
+            </Text>
+            <Text style={styles.cardLine}>
+              Number: <Text style={{ fontWeight: "bold" }}>{docNumber}</Text>
+            </Text>
+            <Text style={styles.cardLine}>Date: {formatDate(docDate)}</Text>
+            <Text style={styles.cardLine}>
+              Status: <Text style={{ fontWeight: "bold" }}>{statusLabel}</Text>
             </Text>
           </View>
-          <View style={styles.row}>
-            <Text style={styles.label}>Status:</Text>
-            <Text style={styles.value}>{order.status.toUpperCase()}</Text>
-          </View>
-          {order.client_notes && (
-            <View style={styles.row}>
-              <Text style={styles.label}>Reference:</Text>
-              <Text style={styles.value}>{order.client_notes}</Text>
-            </View>
-          )}
-        </View>
-
-        {/* Customer Information */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Customer Details</Text>
-          
-          {/* Check if it's a company (has VAT number) or individual */}
-          {company.vat_number ? (
-            // Company format
-            <>
-              <View style={styles.row}>
-                <Text style={styles.label}>Company:</Text>
-                <Text style={styles.value}>{company.name}</Text>
-              </View>
-              <View style={styles.row}>
-                <Text style={styles.label}>VAT Number:</Text>
-                <Text style={styles.value}>{company.vat_number}</Text>
-              </View>
-              {createdByProfile?.full_name && (
-                <View style={styles.row}>
-                  <Text style={styles.label}>Contact Person:</Text>
-                  <Text style={styles.value}>{createdByProfile.full_name}</Text>
-                </View>
-              )}
-              {createdByProfile?.email && (
-                <View style={styles.row}>
-                  <Text style={styles.label}>Email:</Text>
-                  <Text style={styles.value}>{createdByProfile.email}</Text>
-                </View>
-              )}
-            </>
-          ) : (
-            // Individual format
-            <>
-              {createdByProfile?.full_name && (
-                <View style={styles.row}>
-                  <Text style={styles.label}>Name:</Text>
-                  <Text style={styles.value}>{createdByProfile.full_name}</Text>
-                </View>
-              )}
-              {createdByProfile?.email && (
-                <View style={styles.row}>
-                  <Text style={styles.label}>Email:</Text>
-                  <Text style={styles.value}>{createdByProfile.email}</Text>
-                </View>
-              )}
-            </>
-          )}
-          
-          {/* Address information */}
-          {company.address_line1 && (
-            <>
-              <View style={styles.row}>
-                <Text style={styles.label}>Address:</Text>
-                <Text style={styles.value}>{company.address_line1}</Text>
-              </View>
-              {company.address_line2 && (
-                <View style={styles.row}>
-                  <Text style={styles.label}></Text>
-                  <Text style={styles.value}>{company.address_line2}</Text>
-                </View>
-              )}
-              <View style={styles.row}>
-                <Text style={styles.label}></Text>
-                <Text style={styles.value}>
-                  {company.city}, {company.postal_code}
-                </Text>
-              </View>
-              <View style={styles.row}>
-                <Text style={styles.label}></Text>
-                <Text style={styles.value}>{company.country}</Text>
-              </View>
-            </>
-          )}
-          {company.phone && (
-            <View style={styles.row}>
-              <Text style={styles.label}>Phone:</Text>
-              <Text style={styles.value}>{company.phone}</Text>
-            </View>
-          )}
-        </View>
-
-        {/* Order Items Table */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Order Items</Text>
-          <View style={styles.table}>
-            {/* Table Header */}
-            <View style={styles.tableHeader}>
-              <Text style={styles.col1}>#</Text>
-              <Text style={styles.col2}>Product</Text>
-              <Text style={[styles.col3, { textAlign: 'center' }]}>Supplier</Text>
-              <Text style={styles.col4}>Qty</Text>
-              <Text style={styles.col5}>Price EUR excl VAT</Text>
-              <Text style={styles.col6}>VAT Rate</Text>
-              <Text style={styles.col7}>Total (EUR)</Text>
-            </View>
-
-            {/* Table Rows */}
-            {items.map((item, index) => {
-              const grossEUR = orderLineUnitGrossEURDisplay(item, order);
-              const lineGrossEUR = orderLineGrossEURDisplay(item, order);
-              
-              // For 0% VAT orders, show the same net price as 23% VAT orders would have
-              // This ensures consistency and avoids confusion
-              let netEUR, lineTotal, displayTotal;
-              
-              if (order.vat_rate === 0) {
-                // For 0% VAT: calculate what the net price would be at 23% VAT
-                // This ensures the "Price EUR excl VAT" shows the same value as 23% VAT orders
-                const netAt23Percent = grossEUR / 1.23;
-                netEUR = netAt23Percent;
-                lineTotal = netAt23Percent * item.quantity;
-                displayTotal = lineTotal; // Show net total for 0% VAT
-              } else {
-                // For 23% VAT: normal calculation
-                netEUR = grossEUR / (1 + (order.vat_rate / 100));
-                lineTotal = netEUR * item.quantity;
-                displayTotal = lineGrossEUR; // Show gross total for 23% VAT
-              }
-              
-              return (
-                <View
-                  key={item.id}
-                  style={index % 2 === 0 ? styles.tableRow : styles.tableRowAlt}
-                >
-                  <Text style={styles.col1}>{item.line_number}</Text>
-                  <View style={styles.col2}>
-                    <Text>{item.product_name}</Text>
-                    {item.notes && (
-                      <Text style={styles.itemNotes}>{item.notes}</Text>
-                    )}
-                  </View>
-                  <Text style={styles.col3}>{item.supplier_name || '-'}</Text>
-                  <Text style={styles.col4}>
-                    {item.quantity} {item.unit_of_measure === 'm2' ? 'm²' : 'pcs'}
-                  </Text>
-                  <Text style={styles.col5}>
-                    {formatCurrency(netEUR, 'EUR')}
-                  </Text>
-                  <Text style={styles.col6}>
-                    {order.vat_rate}%
-                  </Text>
-                  <Text style={styles.col7}>
-                    {formatCurrency(displayTotal, 'EUR')}
-                  </Text>
-                </View>
-              );
-            })}
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Customer</Text>
+            <Text style={[styles.cardLine, { fontWeight: "bold" }]}>
+              {customerName}
+            </Text>
+            {customerEmail && (
+              <Text style={styles.cardLine}>{customerEmail}</Text>
+            )}
+            {company?.vat_number && (
+              <Text style={styles.cardMuted}>VAT: {company.vat_number}</Text>
+            )}
+            {addressParts.map((line, i) => (
+              <Text key={i} style={styles.cardMuted}>
+                {line}
+              </Text>
+            ))}
+            {(company?.phone || createdByProfile?.phone) && (
+              <Text style={styles.cardMuted}>
+                {company?.phone || createdByProfile?.phone}
+              </Text>
+            )}
           </View>
         </View>
 
-        {/* Totals */}
-        <View style={styles.totalsSection}>
+        <Text style={styles.sectionLabel}>
+          {isOffer ? "Offer items" : "Order items"} · Prices in EUR
+        </Text>
+
+        {TableHeader}
+
+        {sortedItems.map((item, index) => {
+          const unitGross = orderLineUnitGrossEURDisplay(item, order);
+          const lineGross = orderLineGrossEURDisplay(item, order);
+          const vat = Number(item.vat_rate_override ?? order.vat_rate ?? 23);
+          const unitNet =
+            vat === 0 ? unitGross / 1.23 : unitGross / (1 + vat / 100);
+          const lineTotal = vat === 0 ? unitNet * Number(item.quantity) : lineGross;
+          const url = (item.website_url || "").trim();
+
+          return (
+            <View
+              key={item.id || index}
+              style={[
+                styles.tableRow,
+                index % 2 === 1 ? styles.tableRowAlt : {},
+              ]}
+              wrap={false}
+            >
+              <Text style={[styles.cellText, styles.colNum]}>
+                {item.line_number ?? index + 1}
+              </Text>
+              <View style={styles.colProduct}>
+                <Text style={styles.productName}>{item.product_name}</Text>
+                {item.specification && (
+                  <Text style={styles.productSpec}>{item.specification}</Text>
+                )}
+                {item.notes && (
+                  <Text style={styles.productNote}>{item.notes}</Text>
+                )}
+              </View>
+              <Text style={[styles.cellText, styles.colSupplier]}>
+                {item.supplier_name || "—"}
+              </Text>
+              <Text style={[styles.cellText, styles.colQty]}>
+                {formatQty(item.quantity)}
+              </Text>
+              <Text style={[styles.cellText, styles.colUnit]}>
+                {formatOrderUnit(item.unit_of_measure)}
+              </Text>
+              <Text style={[styles.cellText, styles.colPrice]}>
+                {formatCurrency(unitNet)}
+              </Text>
+              <Text style={[styles.cellText, styles.colTotal]}>
+                {formatCurrency(lineTotal)}
+              </Text>
+              <View style={styles.colLink}>
+                {url ? (
+                  <Link src={url} style={styles.viewLink}>
+                    VIEW
+                  </Link>
+                ) : (
+                  <Text style={styles.dash}>—</Text>
+                )}
+              </View>
+            </View>
+          );
+        })}
+
+        <View style={styles.totalsWrap} wrap={false}>
           <View style={styles.totalRow}>
-            <Text style={styles.totalLabel}>
-              {order.vat_rate === 0 ? 'Subtotal (net):' : 'Subtotal (excl. VAT):'}
-            </Text>
-            <Text style={styles.totalValue}>
-              {formatCurrency((totals?.items_net_before_header ?? totals?.subtotal_without_vat) || 0, order.currency)}
-            </Text>
+            <Text style={styles.totalLabel}>Subtotal excl. VAT</Text>
+            <Text style={styles.totalValue}>{formatCurrency(subtotal)}</Text>
           </View>
-          {(order.discount_percent || 0) > 0 && (
+          {headerDiscount > 0 && (
             <View style={styles.totalRow}>
-              <Text style={styles.totalLabel}>Discount ({order.discount_percent}%):</Text>
+              <Text style={styles.totalLabel}>
+                Discount
+                {order.discount_percent ? ` (${order.discount_percent}%)` : ""}
+              </Text>
               <Text style={styles.totalValue}>
-                -{formatCurrency(totals?.header_discount_amt || 0, order.currency)}
+                −{formatCurrency(headerDiscount)}
               </Text>
             </View>
           )}
-          {order.vat_rate > 0 && (
+          {(order.vat_rate || 0) > 0 && (
             <View style={styles.totalRow}>
-              <Text style={styles.totalLabel}>VAT ({order.vat_rate}%):</Text>
+              <Text style={styles.totalLabel}>VAT ({order.vat_rate}%)</Text>
+              <Text style={styles.totalValue}>{formatCurrency(vatAmount)}</Text>
+            </View>
+          )}
+          {(totals?.shipping_cost || order.shipping_cost || 0) > 0 && (
+            <View style={styles.totalRow}>
+              <Text style={styles.totalLabel}>Shipping</Text>
               <Text style={styles.totalValue}>
-                {formatCurrency(totals?.vat_amount || 0, order.currency)}
+                {formatCurrency(totals?.shipping_cost || order.shipping_cost)}
               </Text>
             </View>
           )}
-          {(totals?.shipping_cost || 0) > 0 && (
-            <View style={styles.totalRow}>
-              <Text style={styles.totalLabel}>Shipping:</Text>
-              <Text style={styles.totalValue}>
-                {formatCurrency(totals.shipping_cost, order.currency)}
-              </Text>
+          <View style={styles.grandRow}>
+            <Text style={styles.grandLabel}>TOTAL</Text>
+            <Text style={styles.grandValue}>{formatCurrency(grandTotal)}</Text>
+          </View>
+        </View>
+
+        <View style={styles.paymentRow} wrap={false}>
+          <View style={styles.paymentCard}>
+            <Text style={styles.paymentTitle}>Bank transfer</Text>
+            <Text style={styles.paymentDetail}>Bank: PKO Bank Polski</Text>
+            <Text style={styles.paymentDetail}>
+              IBAN: PL 77 1020 2313 0000 3602 1175 9752
+            </Text>
+            <Text style={styles.paymentDetail}>BIC/SWIFT: BPKOPLPW</Text>
+            <Text style={styles.paymentDetail}>
+              Payment reference: {docNumber}
+            </Text>
+          </View>
+          {showPayButton && payHref && (
+            <View style={styles.paymentCard}>
+              <Text style={styles.paymentTitle}>Pay by card</Text>
+              <Text style={styles.payHint}>Secure online payment</Text>
+              <Link src={payHref} style={styles.payButton}>
+                <Text style={styles.payButtonText}>
+                  PAY {formatCurrency(grandTotal)}
+                </Text>
+              </Link>
             </View>
           )}
-          <View style={styles.grandTotal}>
-            <Text style={styles.grandTotalLabel}>
-              {order.vat_rate === 0 ? 'TOTAL (net):' : 'GRAND TOTAL:'}
-            </Text>
-            <Text style={styles.grandTotalValue}>
-              {formatCurrency(totals?.grand_total || 0, order.currency)}
-            </Text>
-          </View>
         </View>
 
-        {/* Order Notes */}
-        {order.client_notes && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Order Notes</Text>
-            <View style={styles.notesBox}>
-              <Text style={styles.notesText}>{order.client_notes}</Text>
-            </View>
-          </View>
-        )}
-
-        {/* Payment Information */}
-        {order.payment_link_url && !order.prefers_bank_transfer && (
-          <View style={styles.paymentBox}>
-            <Text style={styles.paymentTitle}>Online Payment</Text>
-            <Text style={styles.paymentDetail}>{order.payment_link_url}</Text>
-          </View>
-        )}
-
-        {(order.prefers_bank_transfer || !order.payment_link_url) && (
-        <View style={styles.paymentBox}>
-          <Text style={styles.paymentTitle}>Payment Information</Text>
-          <Text style={styles.paymentDetail}>
-            Bank Name: PKO Bank Polski
+        <View style={styles.footer} fixed>
+          <Text style={styles.footerTagline}>
+            One order. One delivery. One contact.
           </Text>
-          <Text style={styles.paymentDetail}>
-            Account Number (IBAN): PL 77 1020 2313 0000 3602 1175 9752
+          <Text style={styles.footerText}>
+            All prices include delivery to Ireland. VAT at {order.vat_rate ?? 23}
+            % applies.
           </Text>
-          <Text style={styles.paymentDetail}>
-            BIC/SWIFT: BPKOPLPW
+          <Text style={styles.footerText}>
+            ImportFromPoland P.S.A. · KRS 0001190377 · REGON 542 538 814 ·
+            PL6343059711
           </Text>
-          <Text style={styles.paymentDetail}>
-            Reference: {order.number}
-          </Text>
-          <Text style={{ ...styles.paymentDetail, marginTop: 8, fontWeight: 'bold' }}>
-            Please include the order number in your payment reference.
+          <Text style={styles.footerText}>
+            Al. Wojciecha Korfantego 113/3, 40-156 Katowice, Poland
           </Text>
         </View>
-        )}
-
-        {/* Footer */}
-        <View style={styles.footer}>
-          <View style={styles.footerContent}>
-            <View style={styles.footerLeft}>
-              <Text>ImportFromPoland | Company Registration: PL6343059711</Text>
-              <Text>Registered office: Al Wojciecha Korfantego 113/3</Text>
-              <Text>40-156 Katowice, Poland</Text>
-              <Text>REGON: 542 538 814 | KRS: 0001190377</Text>
-              <Text style={{ marginTop: 5 }}>
-                All prices include delivery to Ireland. VAT at {order.vat_rate}% applies.
-              </Text>
-              <Text style={{ marginTop: 5 }}>
-                Thank you for your business!
-              </Text>
-            </View>
-            <View style={styles.footerRight}>
-              <Image src="/logo.png" style={styles.footerLogo} alt="Company Logo" />
-            </View>
-          </View>
-        </View>
+        <Text
+          style={styles.pageNumber}
+          render={({ pageNumber, totalPages }) =>
+            `${pageNumber} of ${totalPages}`
+          }
+          fixed
+        />
       </Page>
     </Document>
   );
 };
-

@@ -121,6 +121,9 @@ export default function AdminOffersPage() {
   const [sortKey, setSortKey] = useState<SortKey>("created_at");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [listTab, setListTab] = useState<"active" | "archive" | "converted">(
+    "active"
+  );
 
   useEffect(() => {
     loadOffers();
@@ -183,7 +186,17 @@ export default function AdminOffersPage() {
   };
 
   const sortedOffers = useMemo(() => {
-    const list = [...offers];
+    const list = [...offers].filter((offer) => {
+      const status = offer.version?.status || "";
+      const converted = Boolean(offer.version?.order_id) || status === "accepted";
+      if (listTab === "converted") return converted;
+      if (listTab === "archive") return status === "archived";
+      return (
+        !converted &&
+        status !== "archived" &&
+        !["superseded", "cancelled", "rejected", "expired"].includes(status)
+      );
+    });
     const dir = sortDir === "asc" ? 1 : -1;
 
     list.sort((a, b) => {
@@ -220,7 +233,7 @@ export default function AdminOffersPage() {
     });
 
     return list;
-  }, [offers, sortKey, sortDir]);
+  }, [offers, sortKey, sortDir, listTab]);
 
   const deleteOffer = async (offer: OfferRow) => {
     const status = offer.version?.status;
@@ -255,9 +268,10 @@ export default function AdminOffersPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Individual Offers</h1>
+          <h1 className="text-2xl font-bold">Offers</h1>
           <p className="text-muted-foreground">
-            Windows, roofs, balustrades and custom projects
+            Basket quotations and package offers (windows, roofs, etc.) — one list,
+            shared numbering
           </p>
         </div>
         <Button asChild>
@@ -268,9 +282,38 @@ export default function AdminOffersPage() {
         </Button>
       </div>
 
+      <div className="flex gap-2 border-b">
+        {(
+          [
+            ["active", "Active"],
+            ["archive", "Archive"],
+            ["converted", "Converted"],
+          ] as const
+        ).map(([key, label]) => (
+          <button
+            key={key}
+            type="button"
+            onClick={() => setListTab(key)}
+            className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px ${
+              listTab === key
+                ? "border-primary text-foreground"
+                : "border-transparent text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
       <Card>
         <CardHeader>
-          <CardTitle>Offers</CardTitle>
+          <CardTitle>
+            {listTab === "active"
+              ? "Active offers"
+              : listTab === "archive"
+                ? "Archived offers"
+                : "Converted offers"}
+          </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">

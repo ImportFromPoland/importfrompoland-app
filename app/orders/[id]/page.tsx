@@ -782,11 +782,7 @@ export default function OrderDetailPage() {
               </>
             )}
 
-            {order.payment_link_url &&
-              !order.prefers_bank_transfer &&
-              ["confirmed", "paid", "partially_packed", "packed", "partially_dispatched", "dispatched", "partially_delivered", "delivered"].includes(
-                order.status
-              ) && (
+            {order.payment_link_url && (
               <Card>
                 <CardHeader>
                   <CardTitle className="text-lg">Pay Online</CardTitle>
@@ -796,11 +792,13 @@ export default function OrderDetailPage() {
                     href={order.payment_link_url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 text-primary font-medium hover:underline"
+                    className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
                   >
-                    Open payment link
-                    <ExternalLink className="h-4 w-4" />
+                    Pay online
                   </a>
+                  <p className="text-xs text-muted-foreground mt-2">
+                    Secure card payment — opens in a new tab.
+                  </p>
                 </CardContent>
               </Card>
             )}

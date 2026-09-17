@@ -27,18 +27,19 @@ import {
   emptyOfferLine,
   type EditableOfferLine,
 } from "@/components/admin/OfferLinesEditor";
-import { Copy, Download, Pencil, Share2, X } from "lucide-react";
+import { Copy, Download, Pencil, Share2, X, CheckCircle, Archive } from "lucide-react";
 import { downloadIndividualOfferPdf } from "@/lib/individual-offer-pdf";
 
 const STATUS_LABELS: Record<string, string> = {
   draft: "Draft",
   sent: "Shared",
   viewed: "Viewed",
-  accepted: "Accepted",
+  accepted: "Accepted / Converted",
   expired: "Expired",
   superseded: "Superseded",
   rejected: "Rejected",
   cancelled: "Cancelled",
+  archived: "Archived",
 };
 
 type SpecLink = { id?: string; title: string; url: string; sort_order?: number };
@@ -149,7 +150,7 @@ export default function AdminOfferDetailPage() {
       const { data: offerData, error } = await supabase
         .from("individual_offers")
         .select(
-          "*, company:companies(name), client:profiles!client_profile_id(full_name, email, phone)"
+          "*, company:companies(*), client:profiles!client_profile_id(full_name, email, phone, email_is_placeholder)"
         )
         .eq("id", params.id)
         .single();
@@ -294,34 +295,197 @@ export default function AdminOfferDetailPage() {
     if (!offer || !displayVersion) return;
     setDownloadingPdf(true);
     try {
-      await downloadIndividualOfferPdf(
-        {
-          offerNumber: offer.offer_number,
-          versionNumber: displayVersion.version_number,
-          title: displayVersion.title,
-          validUntil: displayVersion.valid_until,
-          clientName: offer.client?.full_name,
-          clientEmail: offer.client?.email,
-          companyName: offer.company?.name,
-          clientNotes: displayVersion.client_notes,
-          lines: displayLines.map((line) => ({
-            label: line.label,
-            amount: Number(line.amount),
-            vat_rate: Number(line.vat_rate),
+      if (offer.offer_kind === "basket") {
+        const { pdf } = await import("@react-pdf/renderer");
+        const { OrderPDF } = await import("@/components/OrderPDF");
+        const React = await import("react");
+
+        const vatRate = 23;
+        const orderLike = {
+          number: offer.offer_number,
+          offer_number: offer.offer_number,
+          offer_date: displayVersion.created_at || offer.created_at,
+          status: "offer",
+          currency: "EUR",
+          vat_rate: vatRate,
+          discount_percent: 0,
+          shipping_cost: 0,
+          payment_link_url: displayVersion.payment_link_url,
+          prefers_bank_transfer: false,
+          client_notes: displayVersion.client_notes,
+          created_at: offer.created_at,
+        };
+
+        const items = displayLines.map((line: any, index: number) => {
+          const qty = Number(line.quantity) || 1;
+          const net =
+            line.unit_price_net != null
+              ? Number(line.unit_price_net)
+              : Number(line.amount) / qty;
+          const lineVat = Number(line.vat_rate ?? vatRate);
+          return {
+            id: line.id || String(index),
+            line_number: line.line_number || index + 1,
+            product_name: line.product_name || line.label,
+            supplier_name: line.supplier_name,
+            website_url: line.website_url,
+            quantity: qty,
+            unit_of_measure: line.unit_of_measure || "unit",
+            currency: "EUR",
+            unit_price: net * (1 + lineVat / 100),
+            original_net_price: net,
             notes: line.notes,
-          })),
-          specLinks: displayLinks.map((link) => ({
-            title: link.title,
-            url: link.url,
-          })),
-          isDraft: displayVersion.status === "draft",
-        },
-        `Offer_${offer.offer_number}_v${displayVersion.version_number}`
-      );
+            specification: line.specification,
+            vat_rate_override: lineVat,
+          };
+        });
+
+        const itemsNet = displayLines.reduce(
+          (sum: number, line: any) => sum + Number(line.amount || 0),
+          0
+        );
+        const vatAmount = displayLines.reduce((sum: number, line: any) => {
+          const net = Number(line.amount || 0);
+          const rate = Number(line.vat_rate ?? vatRate);
+          return sum + (net * rate) / 100;
+        }, 0);
+
+        const blob = await pdf(
+          React.createElement(OrderPDF, {
+            order: orderLike,
+            company: {
+              name: offer.company?.name || offer.guest_name,
+              vat_number: offer.company?.vat_number,
+              address_line1:
+                offer.company?.address_line1 || offer.guest_address_line1,
+              address_line2:
+                offer.company?.address_line2 || offer.guest_address_line2,
+              city: offer.company?.city || offer.guest_city,
+              postal_code:
+                offer.company?.postal_code || offer.guest_postal_code,
+              country: offer.company?.country || offer.guest_country,
+              phone: offer.company?.phone || offer.guest_phone,
+            },
+            items,
+            totals: {
+              items_net: itemsNet,
+              vat_amount: vatAmount,
+              grand_total: itemsNet + vatAmount,
+              shipping_cost: 0,
+            },
+            createdByProfile: {
+              full_name: offer.client?.full_name || offer.guest_name,
+              email: offer.guest_email || offer.client?.email,
+              phone: offer.client?.phone || offer.guest_phone,
+            },
+            documentKind: "offer",
+          }) as any
+        ).toBlob();
+
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `Offer_${offer.offer_number}.pdf`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+      } else {
+        await downloadIndividualOfferPdf(
+          {
+            offerNumber: offer.offer_number,
+            versionNumber: displayVersion.version_number,
+            title: displayVersion.title,
+            validUntil: displayVersion.valid_until,
+            clientName: offer.client?.full_name || offer.guest_name,
+            clientEmail: offer.guest_email || offer.client?.email,
+            companyName: offer.company?.name,
+            clientNotes: displayVersion.client_notes,
+            lines: displayLines.map((line) => ({
+              label: line.label,
+              amount: Number(line.amount),
+              vat_rate: Number(line.vat_rate),
+              notes: line.notes,
+            })),
+            specLinks: displayLinks.map((link) => ({
+              title: link.title,
+              url: link.url,
+            })),
+            isDraft: displayVersion.status === "draft",
+          },
+          `Offer_${offer.offer_number}_v${displayVersion.version_number}`
+        );
+      }
     } catch (e: any) {
       alert(e.message || "Could not generate PDF");
     } finally {
       setDownloadingPdf(false);
+    }
+  };
+
+  const confirmAsOrder = async () => {
+    if (!displayVersion?.id) return;
+    if (
+      !confirm(
+        "Confirm this offer as a submitted order? It will get a normal order number and leave Active offers."
+      )
+    ) {
+      return;
+    }
+    setWorking(true);
+    try {
+      const { data: orderId, error } = await supabase.rpc(
+        "admin_confirm_offer_as_order",
+        { p_version_id: displayVersion.id }
+      );
+      if (error) throw error;
+      alert("Order created. Opening order…");
+      router.push(`/admin/orders/${orderId}`);
+    } catch (e: any) {
+      alert(e.message || "Could not convert offer");
+    } finally {
+      setWorking(false);
+    }
+  };
+
+  const archiveOffer = async () => {
+    if (!displayVersion?.id) return;
+    if (!confirm("Archive this offer? It will move to the Archive tab.")) {
+      return;
+    }
+    setWorking(true);
+    try {
+      const { error } = await supabase.rpc("admin_archive_offer", {
+        p_version_id: displayVersion.id,
+      });
+      if (error) throw error;
+      await loadOffer();
+      alert("Offer archived.");
+    } catch (e: any) {
+      alert(e.message || "Could not archive offer");
+    } finally {
+      setWorking(false);
+    }
+  };
+
+  const saveCompanyAddress = async () => {
+    if (!offer?.company?.id) return;
+    try {
+      const { error } = await supabase
+        .from("companies")
+        .update({
+          address_line1: offer.company.address_line1 || null,
+          address_line2: offer.company.address_line2 || null,
+          city: offer.company.city || null,
+          postal_code: offer.company.postal_code || null,
+          country: offer.company.country || null,
+          phone: offer.company.phone || null,
+        })
+        .eq("id", offer.company.id);
+      if (error) throw error;
+      alert("Customer address saved.");
+    } catch (e: any) {
+      alert(e.message || "Could not save address");
     }
   };
 
@@ -599,29 +763,113 @@ export default function AdminOfferDetailPage() {
                 )}
 
                 {displayVersion?.payment_link_url && (
-                  <div className="flex items-center gap-2 text-sm">
-                    <span className="text-muted-foreground">Payment link:</span>
-                    <code className="bg-gray-100 px-2 py-1 rounded text-xs break-all">
-                      {displayVersion.payment_link_url}
-                    </code>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() =>
-                        navigator.clipboard.writeText(
-                          displayVersion.payment_link_url
-                        )
-                      }
-                    >
-                      <Copy className="h-4 w-4" />
-                    </Button>
+                  <div className="text-sm rounded border bg-muted/30 px-3 py-2">
+                    <span className="font-medium">Card payment link set</span>
+                    <span className="text-muted-foreground">
+                      {" "}
+                      — PDF shows a PAY button only (URL not printed).
+                    </span>
                   </div>
                 )}
 
                 {displayVersion?.order_id && (
                   <p className="text-sm text-green-700">
-                    Accepted — linked order created.
+                    Converted —{" "}
+                    <Link
+                      href={`/admin/orders/${displayVersion.order_id}`}
+                      className="underline"
+                    >
+                      open order
+                    </Link>
                   </p>
+                )}
+
+                {offer.company?.id && (
+                  <div className="border rounded-lg p-4 space-y-3 bg-muted/20">
+                    <h3 className="font-medium text-sm">
+                      Delivery / contact address
+                      {offer.client?.email_is_placeholder
+                        ? " (placeholder account — edit here)"
+                        : ""}
+                    </h3>
+                    <div className="grid md:grid-cols-2 gap-3">
+                      <Input
+                        placeholder="Address line 1"
+                        value={offer.company.address_line1 || ""}
+                        onChange={(e) =>
+                          setOffer({
+                            ...offer,
+                            company: {
+                              ...offer.company,
+                              address_line1: e.target.value,
+                            },
+                          })
+                        }
+                      />
+                      <Input
+                        placeholder="Address line 2"
+                        value={offer.company.address_line2 || ""}
+                        onChange={(e) =>
+                          setOffer({
+                            ...offer,
+                            company: {
+                              ...offer.company,
+                              address_line2: e.target.value,
+                            },
+                          })
+                        }
+                      />
+                      <Input
+                        placeholder="City"
+                        value={offer.company.city || ""}
+                        onChange={(e) =>
+                          setOffer({
+                            ...offer,
+                            company: { ...offer.company, city: e.target.value },
+                          })
+                        }
+                      />
+                      <Input
+                        placeholder="Postal code"
+                        value={offer.company.postal_code || ""}
+                        onChange={(e) =>
+                          setOffer({
+                            ...offer,
+                            company: {
+                              ...offer.company,
+                              postal_code: e.target.value,
+                            },
+                          })
+                        }
+                      />
+                      <Input
+                        placeholder="Country"
+                        value={offer.company.country || ""}
+                        onChange={(e) =>
+                          setOffer({
+                            ...offer,
+                            company: {
+                              ...offer.company,
+                              country: e.target.value,
+                            },
+                          })
+                        }
+                      />
+                      <Input
+                        placeholder="Phone"
+                        value={offer.company.phone || ""}
+                        onChange={(e) =>
+                          setOffer({
+                            ...offer,
+                            company: { ...offer.company, phone: e.target.value },
+                          })
+                        }
+                      />
+                    </div>
+                    <Button type="button" variant="outline" size="sm" onClick={saveCompanyAddress}>
+                      Save address
+                    </Button>
+                  </div>
                 )}
 
                 <div className="flex flex-wrap gap-2 pt-2 border-t">
@@ -634,6 +882,29 @@ export default function AdminOfferDetailPage() {
                     <Download className="h-4 w-4 mr-2" />
                     {downloadingPdf ? "Generating…" : "Download PDF"}
                   </Button>
+                  {isViewingCurrent &&
+                    !displayVersion?.order_id &&
+                    displayVersion?.status !== "accepted" &&
+                    displayVersion?.status !== "archived" && (
+                      <>
+                        <Button
+                          onClick={confirmAsOrder}
+                          disabled={working}
+                          className="bg-green-600 hover:bg-green-700"
+                        >
+                          <CheckCircle className="h-4 w-4 mr-2" />
+                          Confirm as Order
+                        </Button>
+                        <Button
+                          variant="outline"
+                          onClick={archiveOffer}
+                          disabled={working}
+                        >
+                          <Archive className="h-4 w-4 mr-2" />
+                          Archive
+                        </Button>
+                      </>
+                    )}
                   {canEditCurrent && (
                     <Button variant="outline" onClick={startEditing}>
                       <Pencil className="h-4 w-4 mr-2" />

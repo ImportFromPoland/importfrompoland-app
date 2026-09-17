@@ -21,7 +21,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { ArrowLeft, Save, Trash2, Plus, Edit2, Check, X, FileText, Download, CheckCircle, RotateCcw, Send } from "lucide-react";
+import { ArrowLeft, Save, Trash2, Plus, Edit2, Check, X, FileText, Download, CheckCircle, RotateCcw, Send, FilePlus2 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
@@ -44,6 +44,7 @@ export default function AdminOrderDetailPage() {
   const [totals, setTotals] = useState<any>(null);
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const [isStaffAdmin, setIsStaffAdmin] = useState(false);
+  const [creatingOffer, setCreatingOffer] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -362,6 +363,39 @@ export default function AdminOrderDetailPage() {
     }
   };
 
+  const createOfferFromBasket = async () => {
+    if (!order) return;
+    if (!items || items.length === 0) {
+      alert("Add items before creating an offer.");
+      return;
+    }
+    if (
+      !confirm(
+        "Create an Offer from this basket? The offer will appear under Oferty with a new offer number. The basket itself will not become an order."
+      )
+    ) {
+      return;
+    }
+
+    setCreatingOffer(true);
+    try {
+      const response = await fetch("/api/admin/create-offer-from-basket", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ order_id: order.id }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Failed to create offer");
+
+      alert(result.message || "Offer created");
+      router.push(`/admin/offers/${result.offer_id}`);
+    } catch (error: any) {
+      alert("Error creating offer: " + error.message);
+    } finally {
+      setCreatingOffer(false);
+    }
+  };
+
   const submitOrderForClient = async () => {
     if (!order) return;
 
@@ -575,6 +609,18 @@ export default function AdminOrderDetailPage() {
             <Button onClick={saveBasket} variant="outline" className="bg-blue-50 hover:bg-blue-100 border-blue-300">
               <Save className="h-4 w-4 mr-2" />
               Save Basket
+            </Button>
+          )}
+
+          {["draft", "submitted"].includes(order.status) && (
+            <Button
+              onClick={createOfferFromBasket}
+              variant="outline"
+              disabled={creatingOffer}
+              className="border-primary/40 text-primary hover:bg-primary/5"
+            >
+              <FilePlus2 className="h-4 w-4 mr-2" />
+              {creatingOffer ? "Creating offer…" : "Create Offer"}
             </Button>
           )}
           
@@ -1099,30 +1145,29 @@ export default function AdminOrderDetailPage() {
                 </p>
                 {order.prefers_bank_transfer && (
                   <p className="text-xs text-green-700 font-medium">
-                    Client chose bank transfer (+1% volume discount). Do not add a payment link.
+                    Client chose bank transfer (+1% volume discount).
                   </p>
                 )}
               </div>
 
-              {!order.prefers_bank_transfer && (
-                <div className="space-y-2 border-t pt-4">
-                  <Label>Payment Link (confirmation)</Label>
-                  <Input
-                    type="url"
-                    placeholder="https://..."
-                    value={order.payment_link_url || ""}
-                    onChange={(e) =>
-                      setOrder({ ...order, payment_link_url: e.target.value || null })
-                    }
-                    onBlur={(e) =>
-                      updateOrderHeader("payment_link_url", e.target.value.trim() || null)
-                    }
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Shown on order confirmation PDF and client portal when the client did not choose bank transfer.
-                  </p>
-                </div>
-              )}
+              <div className="space-y-2 border-t pt-4">
+                <Label>Payment link (card / Revolut)</Label>
+                <Input
+                  type="url"
+                  placeholder="https://..."
+                  value={order.payment_link_url || ""}
+                  onChange={(e) =>
+                    setOrder({ ...order, payment_link_url: e.target.value || null })
+                  }
+                  onBlur={(e) =>
+                    updateOrderHeader("payment_link_url", e.target.value.trim() || null)
+                  }
+                />
+                <p className="text-xs text-muted-foreground">
+                  On the confirmation PDF this becomes a &quot;PAY …&quot; button only (URL is not
+                  printed). Bank transfer details are always shown.
+                </p>
+              </div>
 
               <div className="space-y-2">
                 <Label>Transport Cost (PLN Net)</Label>
