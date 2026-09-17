@@ -9,8 +9,22 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { formatDate } from "@/lib/utils";
 import { Plus, Calendar, MapPin, Users, Edit, Trash2, Archive, CheckCircle, FileText } from "lucide-react";
+import { TourPlacesManager } from "@/components/admin/TourPlacesManager";
+import { TourDayStopsEditor } from "@/components/admin/TourDayStopsEditor";
+import {
+  stopsToActivitiesText,
+  type TourPlace,
+  type TourStopRow,
+} from "@/lib/tour-places";
 
 interface Tour {
   id: string;
@@ -28,6 +42,25 @@ interface Tour {
   is_active: boolean;
   is_archived: boolean;
   available_spaces: number;
+  outbound_carrier?: string;
+  outbound_departure_time?: string;
+  outbound_arrival_time?: string;
+  outbound_departure_date?: string;
+  outbound_arrival_date?: string;
+  return_carrier?: string;
+  return_departure_time?: string;
+  return_arrival_time?: string;
+  return_departure_date?: string;
+  return_arrival_date?: string;
+  day1_hotel?: string;
+  day1_dinner?: string;
+  day1_activities?: string;
+  day2_hotel?: string;
+  day2_dinner?: string;
+  day2_activities?: string;
+  day3_hotel?: string;
+  day3_dinner?: string;
+  day3_activities?: string;
 }
 
 export default function AdminToursPage() {
@@ -38,6 +71,8 @@ export default function AdminToursPage() {
   const [showForm, setShowForm] = useState(false);
   const [editingTour, setEditingTour] = useState<Tour | null>(null);
   const [activeTab, setActiveTab] = useState("active");
+  const [places, setPlaces] = useState<TourPlace[]>([]);
+  const [tourStops, setTourStops] = useState<TourStopRow[]>([]);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -88,7 +123,91 @@ export default function AdminToursPage() {
   useEffect(() => {
     loadTours();
     loadBookings();
+    loadPlaces();
   }, []);
+
+  const loadPlaces = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("tour_places")
+        .select("*")
+        .order("name");
+      if (error) throw error;
+      setPlaces((data || []) as TourPlace[]);
+    } catch (e) {
+      console.error("Error loading tour places:", e);
+    }
+  };
+
+  const loadTourStops = async (tourId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from("tour_stops")
+        .select("*, place:tour_places(*)")
+        .eq("tour_id", tourId)
+        .order("day_number")
+        .order("sort_order");
+      if (error) throw error;
+      setTourStops(
+        (data || []).map((row: any) => ({
+          id: row.id,
+          place_id: row.place_id,
+          day_number: row.day_number,
+          sort_order: row.sort_order,
+          planned_duration_minutes: row.planned_duration_minutes,
+          notes: row.notes,
+          place: row.place as TourPlace | null,
+        }))
+      );
+    } catch (e) {
+      console.error("Error loading tour stops:", e);
+      setTourStops([]);
+    }
+  };
+
+  const saveTourStops = async (tourId: string, stops: TourStopRow[]) => {
+    const { error: delError } = await supabase
+      .from("tour_stops")
+      .delete()
+      .eq("tour_id", tourId);
+    if (delError) throw delError;
+
+    if (stops.length === 0) return;
+
+    const rows = stops.map((s) => ({
+      tour_id: tourId,
+      place_id: s.place_id,
+      day_number: s.day_number,
+      sort_order: s.sort_order,
+      planned_duration_minutes: s.planned_duration_minutes,
+      notes: s.notes,
+    }));
+
+    const { error: insError } = await supabase.from("tour_stops").insert(rows);
+    if (insError) throw insError;
+  };
+
+  const hotelPlaces = places.filter((p) => p.kind === "hotel" && p.is_active);
+
+  const hotelSelectValue = (hotelName: string) => {
+    const match = hotelPlaces.find((h) => h.name === hotelName);
+    return match?.id || (hotelName ? "__custom__" : "__none__");
+  };
+
+  const applyHotelSelection = (
+    dayKey: "day1_hotel" | "day2_hotel" | "day3_hotel",
+    placeId: string
+  ) => {
+    if (placeId === "__none__") {
+      setFormData((prev) => ({ ...prev, [dayKey]: "" }));
+      return;
+    }
+    if (placeId === "__custom__") return;
+    const place = places.find((p) => p.id === placeId);
+    if (place) {
+      setFormData((prev) => ({ ...prev, [dayKey]: place.name }));
+    }
+  };
 
   const loadTours = async () => {
     try {
@@ -360,6 +479,13 @@ export default function AdminToursPage() {
         .eq('tour_id', tourId)
         .order('created_at', { ascending: true });
 
+      const { data: stopsData } = await supabase
+        .from("tour_stops")
+        .select("*, place:tour_places(*)")
+        .eq("tour_id", tourId)
+        .order("day_number")
+        .order("sort_order");
+
       // Dynamic import to avoid SSR issues with react-pdf
       const { pdf } = await import('@react-pdf/renderer');
       const { TourReportPDF } = await import('@/components/TourReportPDF');
@@ -370,6 +496,7 @@ export default function AdminToursPage() {
         React.createElement(TourReportPDF, {
           tour,
           bookings: tourBookings || [],
+          stops: stopsData || [],
         }) as any
       ).toBlob();
 
@@ -392,6 +519,16 @@ export default function AdminToursPage() {
     e.preventDefault();
     
     try {
+      const day1_activities = tourStops.some((s) => s.day_number === 1)
+        ? stopsToActivitiesText(tourStops, 1)
+        : formData.day1_activities;
+      const day2_activities = tourStops.some((s) => s.day_number === 2)
+        ? stopsToActivitiesText(tourStops, 2)
+        : formData.day2_activities;
+      const day3_activities = tourStops.some((s) => s.day_number === 3)
+        ? stopsToActivitiesText(tourStops, 3)
+        : formData.day3_activities;
+
       // First try with basic fields only
       const basicTourData = {
         title: formData.title,
@@ -423,38 +560,45 @@ export default function AdminToursPage() {
         ...(formData.return_arrival_time && { return_arrival_time: formData.return_arrival_time }),
         ...(formData.return_departure_date && { return_departure_date: formData.return_departure_date }),
         ...(formData.return_arrival_date && { return_arrival_date: formData.return_arrival_date }),
-        ...(formData.day1_hotel && { day1_hotel: formData.day1_hotel }),
-        ...(formData.day1_dinner && { day1_dinner: formData.day1_dinner }),
-        ...(formData.day1_activities && { day1_activities: formData.day1_activities }),
-        ...(formData.day2_hotel && { day2_hotel: formData.day2_hotel }),
-        ...(formData.day2_dinner && { day2_dinner: formData.day2_dinner }),
-        ...(formData.day2_activities && { day2_activities: formData.day2_activities }),
-        ...(formData.day3_hotel && { day3_hotel: formData.day3_hotel }),
-        ...(formData.day3_dinner && { day3_dinner: formData.day3_dinner }),
-        ...(formData.day3_activities && { day3_activities: formData.day3_activities })
+        day1_hotel: formData.day1_hotel || null,
+        day1_dinner: formData.day1_dinner || null,
+        day1_activities: day1_activities || null,
+        day2_hotel: formData.day2_hotel || null,
+        day2_dinner: formData.day2_dinner || null,
+        day2_activities: day2_activities || null,
+        day3_hotel: formData.day3_hotel || null,
+        day3_dinner: formData.day3_dinner || null,
+        day3_activities: day3_activities || null,
       };
 
+      let tourId = editingTour?.id;
+
       if (editingTour) {
-        // Update existing tour
         const { error } = await supabase
           .from('tours')
           .update(tourData)
           .eq('id', editingTour.id);
         
         if (error) throw error;
-        alert("Tour updated successfully!");
       } else {
-        // Create new tour
-        const { error } = await supabase
+        const { data, error } = await supabase
           .from('tours')
-          .insert([tourData]);
+          .insert([tourData])
+          .select('id')
+          .single();
         
         if (error) throw error;
-        alert("Tour created successfully!");
+        tourId = data.id;
       }
 
+      if (tourId) {
+        await saveTourStops(tourId, tourStops);
+      }
+
+      alert(editingTour ? "Tour updated successfully!" : "Tour created successfully!");
       setShowForm(false);
       setEditingTour(null);
+      setTourStops([]);
       resetForm();
       loadTours();
     } catch (error) {
@@ -464,6 +608,7 @@ export default function AdminToursPage() {
   };
 
   const resetForm = () => {
+    setTourStops([]);
     setFormData({
       title: '',
       start_date: '',
@@ -592,7 +737,7 @@ export default function AdminToursPage() {
     }
   };
 
-  const handleEdit = (tour: Tour) => {
+  const handleEdit = async (tour: Tour) => {
     setEditingTour(tour);
     setFormData({
       title: tour.title || '',
@@ -630,6 +775,8 @@ export default function AdminToursPage() {
       day3_dinner: tour.day3_dinner || '',
       day3_activities: tour.day3_activities || ''
     });
+    await loadPlaces();
+    await loadTourStops(tour.id);
     setShowForm(true);
   };
 
@@ -665,7 +812,14 @@ export default function AdminToursPage() {
           <h1 className="text-3xl font-bold">Tour Management</h1>
           <p className="text-muted-foreground">Manage factory tours and bookings</p>
         </div>
-        <Button onClick={() => setShowForm(true)}>
+        <Button
+          onClick={() => {
+            loadPlaces();
+            setTourStops([]);
+            setEditingTour(null);
+            setShowForm(true);
+          }}
+        >
           <Plus className="h-4 w-4 mr-2" />
           Add Tour
         </Button>
@@ -896,111 +1050,95 @@ export default function AdminToursPage() {
               {/* Daily Itinerary */}
               <div className="space-y-4">
                 <h3 className="text-lg font-semibold">Daily Itinerary</h3>
-                
-                {/* Day 1 */}
-                <div className="space-y-3 p-4 border rounded-lg">
-                  <h4 className="font-medium">Day 1</h4>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <Label htmlFor="day1_hotel">Hotel</Label>
-                      <Input
-                        id="day1_hotel"
-                        value={formData.day1_hotel}
-                        onChange={(e) => setFormData({...formData, day1_hotel: e.target.value})}
-                        placeholder="e.g., Hotel Katowice - 3★ Superior"
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="day1_dinner">Dinner</Label>
-                      <Input
-                        id="day1_dinner"
-                        value={formData.day1_dinner}
-                        onChange={(e) => setFormData({...formData, day1_dinner: e.target.value})}
-                        placeholder="e.g., Welcome dinner at Restaurant Polska"
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <Label htmlFor="day1_activities">Activities (one per line)</Label>
-                    <Textarea
-                      id="day1_activities"
-                      value={formData.day1_activities}
-                      onChange={(e) => setFormData({...formData, day1_activities: e.target.value})}
-                      rows={3}
-                      placeholder="Morning flight from Shannon to Krakow&#10;Airport transfer to hotel&#10;Check-in at hotel"
-                    />
-                  </div>
-                </div>
+                <p className="text-sm text-muted-foreground">
+                  Hotel z katalogu Places; przystanki (sklepy/showroomy) dodajesz per dzień.
+                  Stare tury bez stops nadal pokażą tekst Activities poniżej.
+                </p>
 
-                {/* Day 2 */}
-                <div className="space-y-3 p-4 border rounded-lg">
-                  <h4 className="font-medium">Day 2</h4>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <Label htmlFor="day2_hotel">Hotel</Label>
-                      <Input
-                        id="day2_hotel"
-                        value={formData.day2_hotel}
-                        onChange={(e) => setFormData({...formData, day2_hotel: e.target.value})}
-                        placeholder="e.g., Hotel Katowice - 3★ Superior"
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="day2_dinner">Dinner</Label>
-                      <Input
-                        id="day2_dinner"
-                        value={formData.day2_dinner}
-                        onChange={(e) => setFormData({...formData, day2_dinner: e.target.value})}
-                        placeholder="e.g., Group dinner at Restaurant Tradycja"
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <Label htmlFor="day2_activities">Activities (one per line)</Label>
-                    <Textarea
-                      id="day2_activities"
-                      value={formData.day2_activities}
-                      onChange={(e) => setFormData({...formData, day2_activities: e.target.value})}
-                      rows={3}
-                      placeholder="Breakfast at hotel&#10;Guided visits to showrooms&#10;Lunch with suppliers"
-                    />
-                  </div>
-                </div>
+                {([1, 2, 3] as const).map((day) => {
+                  const hotelKey = `day${day}_hotel` as "day1_hotel" | "day2_hotel" | "day3_hotel";
+                  const dinnerKey = `day${day}_dinner` as "day1_dinner" | "day2_dinner" | "day3_dinner";
+                  const activitiesKey = `day${day}_activities` as
+                    | "day1_activities"
+                    | "day2_activities"
+                    | "day3_activities";
+                  const hasStructuredStops = tourStops.some((s) => s.day_number === day);
 
-                {/* Day 3 */}
-                <div className="space-y-3 p-4 border rounded-lg">
-                  <h4 className="font-medium">Day 3</h4>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <Label htmlFor="day3_hotel">Hotel</Label>
-                      <Input
-                        id="day3_hotel"
-                        value={formData.day3_hotel}
-                        onChange={(e) => setFormData({...formData, day3_hotel: e.target.value})}
-                        placeholder="e.g., Hotel Katowice - 3★ Superior"
+                  return (
+                    <div key={day} className="space-y-3 p-4 border rounded-lg bg-slate-50/50">
+                      <h4 className="font-medium">Day {day}</h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div className="space-y-2">
+                          <Label>Hotel</Label>
+                          <Select
+                            value={hotelSelectValue(formData[hotelKey])}
+                            onValueChange={(v) => applyHotelSelection(hotelKey, v)}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Wybierz hotel z katalogu…" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="__none__">— brak —</SelectItem>
+                              {hotelPlaces.map((h) => (
+                                <SelectItem key={h.id} value={h.id}>
+                                  {h.name}
+                                  {h.city ? ` · ${h.city}` : ""}
+                                </SelectItem>
+                              ))}
+                              {formData[hotelKey] &&
+                                !hotelPlaces.some((h) => h.name === formData[hotelKey]) && (
+                                  <SelectItem value="__custom__">
+                                    Ręcznie: {formData[hotelKey]}
+                                  </SelectItem>
+                                )}
+                            </SelectContent>
+                          </Select>
+                          <Input
+                            value={formData[hotelKey]}
+                            onChange={(e) =>
+                              setFormData({ ...formData, [hotelKey]: e.target.value })
+                            }
+                            placeholder="lub wpisz nazwę hotelu ręcznie"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Dinner</Label>
+                          <Input
+                            value={formData[dinnerKey]}
+                            onChange={(e) =>
+                              setFormData({ ...formData, [dinnerKey]: e.target.value })
+                            }
+                            placeholder="np. Welcome dinner at Restaurant Polska"
+                          />
+                        </div>
+                      </div>
+
+                      <TourDayStopsEditor
+                        dayNumber={day}
+                        places={places}
+                        stops={tourStops}
+                        onChange={setTourStops}
                       />
+
+                      {!hasStructuredStops && (
+                        <div>
+                          <Label>Activities (legacy — one per line)</Label>
+                          <Textarea
+                            value={formData[activitiesKey]}
+                            onChange={(e) =>
+                              setFormData({
+                                ...formData,
+                                [activitiesKey]: e.target.value,
+                              })
+                            }
+                            rows={2}
+                            placeholder="Używane tylko gdy nie ma strukturalnych przystanków"
+                          />
+                        </div>
+                      )}
                     </div>
-                    <div>
-                      <Label htmlFor="day3_dinner">Dinner</Label>
-                      <Input
-                        id="day3_dinner"
-                        value={formData.day3_dinner}
-                        onChange={(e) => setFormData({...formData, day3_dinner: e.target.value})}
-                        placeholder="e.g., Farewell lunch at Hotel restaurant"
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <Label htmlFor="day3_activities">Activities (one per line)</Label>
-                    <Textarea
-                      id="day3_activities"
-                      value={formData.day3_activities}
-                      onChange={(e) => setFormData({...formData, day3_activities: e.target.value})}
-                      rows={3}
-                      placeholder="Breakfast at hotel&#10;Final showroom visits&#10;Airport transfer"
-                    />
-                  </div>
-                </div>
+                  );
+                })}
               </div>
 
               <div className="flex gap-2">
@@ -1024,12 +1162,28 @@ export default function AdminToursPage() {
         </Card>
       )}
 
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
+      <Tabs
+        value={activeTab}
+        onValueChange={(v) => {
+          setActiveTab(v);
+          if (v === "active" || v === "places") loadPlaces();
+        }}
+        className="space-y-4"
+      >
         <TabsList>
           <TabsTrigger value="active">Aktywne Wycieczki</TabsTrigger>
+          <TabsTrigger value="places">Places</TabsTrigger>
           <TabsTrigger value="bookings">Rezerwacje</TabsTrigger>
           <TabsTrigger value="archived">Archiwum</TabsTrigger>
         </TabsList>
+
+        <TabsContent value="places" className="space-y-4">
+          <Card>
+            <CardContent className="pt-6">
+              <TourPlacesManager />
+            </CardContent>
+          </Card>
+        </TabsContent>
 
         <TabsContent value="active" className="space-y-4">
           <div className="grid gap-4">

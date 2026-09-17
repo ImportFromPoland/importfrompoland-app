@@ -139,16 +139,115 @@ const styles = StyleSheet.create({
     color: '#333',
     lineHeight: 1.4,
   },
+  dayHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  dayBadge: {
+    backgroundColor: '#E94444',
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: 'bold',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    marginRight: 10,
+  },
+  dayHeaderMeta: {
+    flex: 1,
+  },
+  dayDate: {
+    fontSize: 11,
+    fontWeight: 'bold',
+    color: '#111',
+  },
+  dayHotel: {
+    fontSize: 8,
+    color: '#666',
+    marginTop: 2,
+  },
+  stopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+    paddingBottom: 8,
+    borderBottom: '0.5pt solid #e5e5e5',
+  },
+  stopTimeline: {
+    width: 14,
+    alignItems: 'center',
+    marginRight: 6,
+  },
+  stopDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: '#E94444',
+  },
+  stopLogo: {
+    width: 28,
+    height: 28,
+    objectFit: 'contain',
+    marginRight: 8,
+  },
+  stopLogoPlaceholder: {
+    width: 28,
+    height: 28,
+    marginRight: 8,
+    backgroundColor: '#eee',
+    borderRadius: 3,
+  },
+  stopBody: {
+    flex: 1,
+    paddingRight: 8,
+  },
+  stopName: {
+    fontSize: 10,
+    fontWeight: 'bold',
+    color: '#111',
+    marginBottom: 2,
+  },
+  stopDesc: {
+    fontSize: 8,
+    color: '#555',
+    lineHeight: 1.35,
+  },
+  stopDuration: {
+    fontSize: 8,
+    color: '#888',
+    width: 48,
+    textAlign: 'right',
+    marginRight: 8,
+  },
+  stopThumb: {
+    width: 72,
+    height: 48,
+    objectFit: 'cover',
+    borderRadius: 3,
+  },
+  stopThumbPlaceholder: {
+    width: 72,
+    height: 48,
+    backgroundColor: '#e8e8e8',
+    borderRadius: 3,
+  },
 });
 
 interface TourReportPDFProps {
   tour: any;
   bookings: any[];
+  stops?: any[];
 }
 
-export const TourReportPDF: React.FC<TourReportPDFProps> = ({ tour, bookings }) => {
-  const formatDate = (date: string) => {
-    return new Date(date).toLocaleDateString('en-IE', {
+export const TourReportPDF: React.FC<TourReportPDFProps> = ({
+  tour,
+  bookings,
+  stops = [],
+}) => {
+  const formatDate = (date: string, addDays = 0) => {
+    const d = new Date(date);
+    if (addDays) d.setDate(d.getDate() + addDays);
+    return d.toLocaleDateString('en-IE', {
       year: 'numeric',
       month: 'long',
       day: 'numeric',
@@ -162,6 +261,105 @@ export const TourReportPDF: React.FC<TourReportPDFProps> = ({ tour, bookings }) 
       minute: '2-digit',
     });
   };
+
+  const formatDuration = (mins: number | null | undefined) => {
+    if (mins == null || mins <= 0) return '';
+    if (mins < 60) return `${mins} min`;
+    const h = Math.floor(mins / 60);
+    const m = mins % 60;
+    return m ? `${h}h ${m}min` : `${h}h`;
+  };
+
+  const stopsForDay = (day: number) =>
+    (stops || [])
+      .filter((s: any) => s.day_number === day)
+      .sort((a: any, b: any) => a.sort_order - b.sort_order);
+
+  const renderDayStops = (day: number, legacyActivities?: string) => {
+    const dayStops = stopsForDay(day);
+    if (dayStops.length > 0) {
+      return dayStops.map((s: any, i: number) => {
+        const name = s.place?.name || 'Stop';
+        const dur = formatDuration(s.planned_duration_minutes);
+        const desc = s.place?.short_description || s.place?.highlights;
+        const note = s.notes;
+        const logoUrl = s.place?.logo_url;
+        const thumbUrl = s.place?.thumbnail_url;
+        return (
+          <View key={s.id || i} style={styles.stopRow} wrap={false}>
+            <View style={styles.stopTimeline}>
+              <View style={styles.stopDot} />
+            </View>
+            {logoUrl ? (
+              <Image src={logoUrl} style={styles.stopLogo} />
+            ) : (
+              <View style={styles.stopLogoPlaceholder} />
+            )}
+            <View style={styles.stopBody}>
+              <Text style={styles.stopName}>{name}</Text>
+              {desc ? <Text style={styles.stopDesc}>{desc}</Text> : null}
+              {note ? (
+                <Text style={styles.stopDesc}>{note}</Text>
+              ) : null}
+            </View>
+            <Text style={styles.stopDuration}>{dur || ''}</Text>
+            {thumbUrl ? (
+              <Image src={thumbUrl} style={styles.stopThumb} />
+            ) : (
+              <View style={styles.stopThumbPlaceholder} />
+            )}
+          </View>
+        );
+      });
+    }
+    if (legacyActivities) {
+      return (
+        <Text style={styles.itineraryText}>
+          <Text style={{ fontWeight: 'bold' }}>Activities:</Text> {legacyActivities}
+        </Text>
+      );
+    }
+    return null;
+  };
+
+  const renderDayBlock = (
+    day: number,
+    dateLabel: string,
+    hotel?: string,
+    dinner?: string,
+    legacyActivities?: string
+  ) => {
+    const dayStops = stopsForDay(day);
+    if (!hotel && !dinner && !legacyActivities && dayStops.length === 0) {
+      return null;
+    }
+    return (
+      <View style={styles.itineraryBox} wrap={false}>
+        <View style={styles.dayHeaderRow}>
+          <Text style={styles.dayBadge}>DAY {day}</Text>
+          <View style={styles.dayHeaderMeta}>
+            <Text style={styles.dayDate}>{dateLabel}</Text>
+            {hotel ? (
+              <Text style={styles.dayHotel}>Hotel: {hotel}</Text>
+            ) : null}
+            {dinner ? (
+              <Text style={styles.dayHotel}>Dinner: {dinner}</Text>
+            ) : null}
+          </View>
+        </View>
+        {renderDayStops(day, legacyActivities)}
+      </View>
+    );
+  };
+
+  const hasAnyDay =
+    tour.day1_hotel ||
+    tour.day2_hotel ||
+    tour.day3_hotel ||
+    tour.day1_activities ||
+    tour.day2_activities ||
+    tour.day3_activities ||
+    (stops && stops.length > 0);
 
   const confirmedBookings = bookings.filter(b => b.status === 'confirmed');
   const pendingBookings = bookings.filter(b => b.status === 'pending');
@@ -257,65 +455,29 @@ export const TourReportPDF: React.FC<TourReportPDFProps> = ({ tour, bookings }) 
         )}
 
         {/* Daily Itinerary */}
-        {(tour.day1_hotel || tour.day2_hotel || tour.day3_hotel) && (
+        {hasAnyDay && (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Daily Itinerary</Text>
-            
-            {tour.day1_hotel && (
-              <View style={styles.itineraryBox}>
-                <Text style={styles.itineraryTitle}>Day 1 - {formatDate(tour.start_date)}</Text>
-                <Text style={styles.itineraryText}>
-                  <Text style={{ fontWeight: 'bold' }}>Hotel:</Text> {tour.day1_hotel}
-                </Text>
-                {tour.day1_dinner && (
-                  <Text style={styles.itineraryText}>
-                    <Text style={{ fontWeight: 'bold' }}>Dinner:</Text> {tour.day1_dinner}
-                  </Text>
-                )}
-                {tour.day1_activities && (
-                  <Text style={styles.itineraryText}>
-                    <Text style={{ fontWeight: 'bold' }}>Activities:</Text> {tour.day1_activities}
-                  </Text>
-                )}
-              </View>
+            {renderDayBlock(
+              1,
+              formatDate(tour.start_date),
+              tour.day1_hotel,
+              tour.day1_dinner,
+              tour.day1_activities
             )}
-
-            {tour.day2_hotel && (
-              <View style={styles.itineraryBox}>
-                <Text style={styles.itineraryTitle}>Day 2 - {formatDate(tour.start_date, 1)}</Text>
-                <Text style={styles.itineraryText}>
-                  <Text style={{ fontWeight: 'bold' }}>Hotel:</Text> {tour.day2_hotel}
-                </Text>
-                {tour.day2_dinner && (
-                  <Text style={styles.itineraryText}>
-                    <Text style={{ fontWeight: 'bold' }}>Dinner:</Text> {tour.day2_dinner}
-                  </Text>
-                )}
-                {tour.day2_activities && (
-                  <Text style={styles.itineraryText}>
-                    <Text style={{ fontWeight: 'bold' }}>Activities:</Text> {tour.day2_activities}
-                  </Text>
-                )}
-              </View>
+            {renderDayBlock(
+              2,
+              formatDate(tour.start_date, 1),
+              tour.day2_hotel,
+              tour.day2_dinner,
+              tour.day2_activities
             )}
-
-            {tour.day3_hotel && (
-              <View style={styles.itineraryBox}>
-                <Text style={styles.itineraryTitle}>Day 3 - {formatDate(tour.end_date)}</Text>
-                <Text style={styles.itineraryText}>
-                  <Text style={{ fontWeight: 'bold' }}>Hotel:</Text> {tour.day3_hotel}
-                </Text>
-                {tour.day3_dinner && (
-                  <Text style={styles.itineraryText}>
-                    <Text style={{ fontWeight: 'bold' }}>Dinner:</Text> {tour.day3_dinner}
-                  </Text>
-                )}
-                {tour.day3_activities && (
-                  <Text style={styles.itineraryText}>
-                    <Text style={{ fontWeight: 'bold' }}>Activities:</Text> {tour.day3_activities}
-                  </Text>
-                )}
-              </View>
+            {renderDayBlock(
+              3,
+              formatDate(tour.end_date),
+              tour.day3_hotel,
+              tour.day3_dinner,
+              tour.day3_activities
             )}
           </View>
         )}

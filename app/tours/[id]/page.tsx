@@ -11,6 +11,19 @@ import { Badge } from "@/components/ui/badge";
 import { Logo } from "@/components/Logo";
 import { formatDate } from "@/lib/utils";
 import { Calendar, MapPin, Users, Plane, CheckCircle, Clock, Mail, MessageCircle } from "lucide-react";
+import {
+  toStopDisplay,
+  type TourPlace,
+  type TourStopDisplay,
+  type TourStopRow,
+} from "@/lib/tour-places";
+
+interface TourDayItinerary {
+  hotel: string;
+  dinner: string;
+  activities: string[];
+  stops: TourStopDisplay[];
+}
 
 interface Tour {
   id: string;
@@ -43,21 +56,9 @@ interface Tour {
   };
   // Daily itinerary
   daily_itinerary: {
-    day1: {
-      hotel: string;
-      dinner: string;
-      activities: string[];
-    };
-    day2: {
-      hotel: string;
-      dinner: string;
-      activities: string[];
-    };
-    day3: {
-      hotel: string;
-      dinner: string;
-      activities: string[];
-    };
+    day1: TourDayItinerary;
+    day2: TourDayItinerary;
+    day3: TourDayItinerary;
   };
 }
 
@@ -131,6 +132,54 @@ export default function TourDetailPage() {
         return total + (booking.booking_type === 'single' ? 1 : 2);
       }, 0) || 0;
 
+      const { data: stopsData } = await supabase
+        .from("tour_stops")
+        .select("*, place:tour_places(*)")
+        .eq("tour_id", tour.id)
+        .order("day_number")
+        .order("sort_order");
+
+      const mappedStops: TourStopRow[] = (stopsData || []).map((row: any) => ({
+        id: row.id,
+        place_id: row.place_id,
+        day_number: row.day_number,
+        sort_order: row.sort_order,
+        planned_duration_minutes: row.planned_duration_minutes,
+        notes: row.notes,
+        place: row.place as TourPlace | null,
+      }));
+
+      const buildDay = (
+        dayNumber: number,
+        hotel: string,
+        dinner: string,
+        legacyActivities: string | null
+      ): TourDayItinerary => {
+        const dayStops = mappedStops
+          .filter((s) => s.day_number === dayNumber)
+          .sort((a, b) => a.sort_order - b.sort_order)
+          .map(toStopDisplay);
+
+        const activities =
+          dayStops.length > 0
+            ? dayStops.map((s) => {
+                const parts = [s.name];
+                if (s.durationLabel) parts.push(`(${s.durationLabel})`);
+                if (s.notes) parts.push(`— ${s.notes}`);
+                return parts.join(" ");
+              })
+            : legacyActivities
+              ? legacyActivities.split("\n").filter((item) => item.trim())
+              : [];
+
+        return {
+          hotel: hotel || "",
+          dinner: dinner || "",
+          activities,
+          stops: dayStops,
+        };
+      };
+
       // Convert database fields to the expected format
       const tourData: Tour = {
         id: tour.id,
@@ -161,21 +210,9 @@ export default function TourDetailPage() {
           arrival_date: tour.return_arrival_date || tour.end_date
         },
         daily_itinerary: {
-          day1: {
-            hotel: tour.day1_hotel || '',
-            dinner: tour.day1_dinner || '',
-            activities: tour.day1_activities ? tour.day1_activities.split('\n').filter(item => item.trim()) : []
-          },
-          day2: {
-            hotel: tour.day2_hotel || '',
-            dinner: tour.day2_dinner || '',
-            activities: tour.day2_activities ? tour.day2_activities.split('\n').filter(item => item.trim()) : []
-          },
-          day3: {
-            hotel: tour.day3_hotel || '',
-            dinner: tour.day3_dinner || '',
-            activities: tour.day3_activities ? tour.day3_activities.split('\n').filter(item => item.trim()) : []
-          }
+          day1: buildDay(1, tour.day1_hotel, tour.day1_dinner, tour.day1_activities),
+          day2: buildDay(2, tour.day2_hotel, tour.day2_dinner, tour.day2_activities),
+          day3: buildDay(3, tour.day3_hotel, tour.day3_dinner, tour.day3_activities),
         }
       };
 
@@ -212,9 +249,9 @@ export default function TourDetailPage() {
           arrival_date: ""
         },
         daily_itinerary: {
-          day1: { hotel: "", dinner: "", activities: [] },
-          day2: { hotel: "", dinner: "", activities: [] },
-          day3: { hotel: "", dinner: "", activities: [] }
+          day1: { hotel: "", dinner: "", activities: [], stops: [] },
+          day2: { hotel: "", dinner: "", activities: [], stops: [] },
+          day3: { hotel: "", dinner: "", activities: [], stops: [] }
         }
       };
       setTour(mockTour);
@@ -395,83 +432,123 @@ export default function TourDetailPage() {
         </CardHeader>
         <CardContent>
           <div className="space-y-6">
-            {/* Day 1 */}
-            <div className="bg-blue-50 p-6 rounded-lg">
-              <h3 className="font-bold text-lg mb-4 text-blue-900">Day 1 - {formatDate(tour.start_date)}</h3>
-              <div className="grid gap-4 md:grid-cols-2">
-                <div>
-                  <h4 className="font-semibold mb-2">🏨 Hotel</h4>
-                  <p className="text-sm">{tour.daily_itinerary.day1.hotel}</p>
+            {(
+              [
+                {
+                  key: "day1" as const,
+                  label: `Day 1 - ${formatDate(tour.start_date)}`,
+                  bg: "bg-blue-50",
+                  title: "text-blue-900",
+                  bullet: "text-blue-500",
+                },
+                {
+                  key: "day2" as const,
+                  label: `Day 2 - ${formatDate(
+                    (() => {
+                      const d = new Date(tour.start_date);
+                      d.setDate(d.getDate() + 1);
+                      return d.toISOString();
+                    })()
+                  )}`,
+                  bg: "bg-green-50",
+                  title: "text-green-900",
+                  bullet: "text-green-500",
+                },
+                {
+                  key: "day3" as const,
+                  label: `Day 3 - ${formatDate(tour.end_date)}`,
+                  bg: "bg-purple-50",
+                  title: "text-purple-900",
+                  bullet: "text-purple-500",
+                },
+              ] as const
+            ).map((dayMeta) => {
+              const day = tour.daily_itinerary[dayMeta.key];
+              return (
+                <div key={dayMeta.key} className={`${dayMeta.bg} p-6 rounded-lg`}>
+                  <h3 className={`font-bold text-lg mb-4 ${dayMeta.title}`}>
+                    {dayMeta.label}
+                  </h3>
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div>
+                      <h4 className="font-semibold mb-2">🏨 Hotel</h4>
+                      <p className="text-sm">{day.hotel || "—"}</p>
+                    </div>
+                    <div>
+                      <h4 className="font-semibold mb-2">🍽️ Dinner</h4>
+                      <p className="text-sm">{day.dinner || "—"}</p>
+                    </div>
+                  </div>
+                  <div className="mt-4">
+                    <h4 className="font-semibold mb-2">
+                      {day.stops.length > 0 ? "Stops" : "Activities"}
+                    </h4>
+                    {day.stops.length > 0 ? (
+                      <ul className="space-y-3">
+                        {day.stops.map((stop, index) => (
+                          <li
+                            key={`${stop.name}-${index}`}
+                            className="text-sm flex items-start gap-3"
+                          >
+                            {stop.logoUrl ? (
+                              <img
+                                src={stop.logoUrl}
+                                alt=""
+                                className="h-8 w-8 object-contain shrink-0 mt-0.5"
+                              />
+                            ) : (
+                              <span className={`${dayMeta.bullet} mt-1`}>•</span>
+                            )}
+                            <div className="flex-1 min-w-0">
+                              <div className="font-medium">
+                                {stop.name}
+                                {stop.durationLabel
+                                  ? ` · ${stop.durationLabel}`
+                                  : ""}
+                              </div>
+                              {stop.description && (
+                                <p className="text-muted-foreground mt-0.5">
+                                  {stop.description}
+                                </p>
+                              )}
+                              {stop.highlights && (
+                                <p className="text-muted-foreground mt-0.5">
+                                  Worth seeing: {stop.highlights}
+                                </p>
+                              )}
+                              {stop.notes && (
+                                <p className="text-muted-foreground mt-0.5 italic">
+                                  {stop.notes}
+                                </p>
+                              )}
+                            </div>
+                            {stop.thumbnailUrl && (
+                              <img
+                                src={stop.thumbnailUrl}
+                                alt=""
+                                className="h-14 w-20 object-cover rounded border shrink-0"
+                              />
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <ul className="space-y-1">
+                        {day.activities.map((activity, index) => (
+                          <li
+                            key={index}
+                            className="text-sm flex items-start gap-2"
+                          >
+                            <span className={`${dayMeta.bullet} mt-1`}>•</span>
+                            <span>{activity}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
                 </div>
-                <div>
-                  <h4 className="font-semibold mb-2">🍽️ Dinner</h4>
-                  <p className="text-sm">{tour.daily_itinerary.day1.dinner}</p>
-                </div>
-              </div>
-              <div className="mt-4">
-                <h4 className="font-semibold mb-2">Activities</h4>
-                <ul className="space-y-1">
-                  {tour.daily_itinerary.day1.activities.map((activity, index) => (
-                    <li key={index} className="text-sm flex items-start gap-2">
-                      <span className="text-blue-500 mt-1">•</span>
-                      <span>{activity}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </div>
-
-            {/* Day 2 */}
-            <div className="bg-green-50 p-6 rounded-lg">
-              <h3 className="font-bold text-lg mb-4 text-green-900">Day 2 - {formatDate(tour.start_date, 1)}</h3>
-              <div className="grid gap-4 md:grid-cols-2">
-                <div>
-                  <h4 className="font-semibold mb-2">🏨 Hotel</h4>
-                  <p className="text-sm">{tour.daily_itinerary.day2.hotel}</p>
-                </div>
-                <div>
-                  <h4 className="font-semibold mb-2">🍽️ Dinner</h4>
-                  <p className="text-sm">{tour.daily_itinerary.day2.dinner}</p>
-                </div>
-              </div>
-              <div className="mt-4">
-                <h4 className="font-semibold mb-2">Activities</h4>
-                <ul className="space-y-1">
-                  {tour.daily_itinerary.day2.activities.map((activity, index) => (
-                    <li key={index} className="text-sm flex items-start gap-2">
-                      <span className="text-green-500 mt-1">•</span>
-                      <span>{activity}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </div>
-
-            {/* Day 3 */}
-            <div className="bg-purple-50 p-6 rounded-lg">
-              <h3 className="font-bold text-lg mb-4 text-purple-900">Day 3 - {formatDate(tour.end_date)}</h3>
-              <div className="grid gap-4 md:grid-cols-2">
-                <div>
-                  <h4 className="font-semibold mb-2">🏨 Hotel</h4>
-                  <p className="text-sm">{tour.daily_itinerary.day3.hotel}</p>
-                </div>
-                <div>
-                  <h4 className="font-semibold mb-2">🍽️ Dinner</h4>
-                  <p className="text-sm">{tour.daily_itinerary.day3.dinner}</p>
-                </div>
-              </div>
-              <div className="mt-4">
-                <h4 className="font-semibold mb-2">Activities</h4>
-                <ul className="space-y-1">
-                  {tour.daily_itinerary.day3.activities.map((activity, index) => (
-                    <li key={index} className="text-sm flex items-start gap-2">
-                      <span className="text-purple-500 mt-1">•</span>
-                      <span>{activity}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </div>
+              );
+            })}
           </div>
         </CardContent>
       </Card>
