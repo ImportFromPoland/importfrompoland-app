@@ -8,6 +8,7 @@ import {
   Image,
   Link,
 } from "@react-pdf/renderer";
+import "@/lib/pdf-open-links-new-window";
 import {
   offerLineGrossAmount,
   offerLineNetAmount,
