@@ -135,6 +135,11 @@ export async function POST(request: Request) {
       order.client_notes ||
       `Offer from basket ${order.number || order.id.slice(0, 8)}`;
 
+    // Default validity: 30 days from today (column is NOT NULL)
+    const validUntilDate = new Date();
+    validUntilDate.setDate(validUntilDate.getDate() + 30);
+    const validUntil = validUntilDate.toISOString().slice(0, 10);
+
     const { data: version, error: versionError } = await admin
       .from("individual_offer_versions")
       .insert({
@@ -148,7 +153,7 @@ export async function POST(request: Request) {
             ? `Manual discount note: ${adminDiscountPercent}% (apply on order if needed)`
             : null,
         payment_link_url: order.payment_link_url || null,
-        valid_until: null,
+        valid_until: validUntil,
       })
       .select("id")
       .single();
